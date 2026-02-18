@@ -9,12 +9,12 @@ import java.util.Map;
 
 /**
  * Root controller for Railway health checks and API information
- * This controller responds at the ROOT level (not under /api context path)
  */
 @RestController
+@RequestMapping("/")
 public class RootController {
 
-    @GetMapping
+    @GetMapping("")
     public Map<String, Object> root() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "online");
@@ -22,12 +22,13 @@ public class RootController {
         response.put("version", "1.0.0");
         response.put("apiPath", "/api");
         response.put("documentation", "/api/swagger-ui.html");
-        response.put("health", "/api/actuator/health");
-        response.put("message", "API is running. Please use /api/v1/* endpoints");
+        response.put("health", "/health");
+        response.put("actuatorHealth", "/api/actuator/health");
+        response.put("message", "API is running. Access API at /api/v1/*");
         return response;
     }
 
-    @GetMapping("/health")
+    @GetMapping("health")
     public Map<String, String> simpleHealth() {
         Map<String, String> response = new HashMap<>();
         response.put("status", "UP");
