@@ -28,12 +28,19 @@ public class DotenvConfig {
      */
     @PostConstruct
     public void init() {
-        // Load environment variables from the .env file
-        Dotenv dotenv = Dotenv.load();
+        // Load environment variables from the .env file (or system environment in production)
+        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
 
         // Set system properties for Spring Mail and Gemini API
-        System.setProperty("spring.mail.password", Objects.requireNonNull(dotenv.get("SPRING_MAIL_PASSWORD")));
-        System.setProperty("GEMINI_API_KEY", Objects.requireNonNull(dotenv.get("GEMINI_API_KEY")));
+        String mailPassword = dotenv.get("SPRING_MAIL_PASSWORD");
+        String geminiKey = dotenv.get("GEMINI_API_KEY");
+
+        if (mailPassword != null) {
+            System.setProperty("spring.mail.password", mailPassword);
+        }
+        if (geminiKey != null) {
+            System.setProperty("GEMINI_API_KEY", geminiKey);
+        }
 
         // Log a message to indicate successful loading of environment variables
         System.out.println("         =========================================================");

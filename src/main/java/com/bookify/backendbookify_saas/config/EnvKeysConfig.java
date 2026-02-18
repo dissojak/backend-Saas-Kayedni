@@ -11,8 +11,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class EnvKeysConfig {
 
-    // Load environment variables from the .env file
-    private static final Dotenv dotenv = Dotenv.load();
+    // Load environment variables from the .env file (or system environment in production)
+    private static final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
 
     /**
      * API key for Gemini integration.
