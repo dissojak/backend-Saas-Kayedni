@@ -18,43 +18,47 @@ L'erreur `DotEnvException: Could not find /.env on the classpath` a été corrig
 
 ### Variables Requises :
 
+⚠️ **IMPORTANT** : Copiez les valeurs depuis votre fichier `.env` local. Ne commitez JAMAIS de vraies valeurs dans Git !
+
 ```bash
 # Google Gemini
-GEMINI_API_KEY=AIzaSyDfYE_M-N7P6tbDS2bbcvETEo6-WI1a6Cw
+GEMINI_API_KEY=your_gemini_api_key_here
 
 # SMTP (Gmail App Password)
-SPRING_MAIL_PASSWORD=jmnwfcjezsscpdkb
-MAIL_USERNAME=dissojak@gmail.com
+SPRING_MAIL_PASSWORD=your_gmail_app_password_here
+MAIL_USERNAME=your_email@gmail.com
 
-# Database
-DB_URL=jdbc:mysql://bookify-mysql-dissojak-6554.a.aivencloud.com:24712/bookify_saas?sslMode=REQUIRED&serverTimezone=UTC
-DB_USERNAME=avnadmin
-DB_PASSWORD=AVNS_JV7jRfgpDz56cM4faQG
+# Database (Aiven MySQL)
+DB_URL=jdbc:mysql://your-db-host:port/database_name?sslMode=REQUIRED&serverTimezone=UTC
+DB_USERNAME=your_db_username
+DB_PASSWORD=your_db_password
 
 # JWT
-JWT_SECRET=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+JWT_SECRET=your_jwt_secret_key_here
 
 # Cloudinary
-CLOUDINARY_CLOUD_NAME=duvougrqx
-CLOUDINARY_API_KEY=513133278582537
-CLOUDINARY_API_SECRET=0UgeZPnsrmRfbWu-u8eZxo-W0uk
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 CLOUDINARY_FOLDER=Bookify
 CLOUDINARY_KEY_NAME=StoonProd
 
 # Flouci API Keys
-FLOUCI_WEBHOOK_SECRET=
+FLOUCI_WEBHOOK_SECRET=your_flouci_webhook_secret
 FLOUCI_BASE_URL=https://developers.flouci.com
-FLOUCI_APP_PUBLIC=d01440af-5a3b-4c9f-8567-6c0f964d1ef7
-FLOUCI_APP_SECRET=dd3163a3-a4ad-4ec5-8875-e5658b3ef0ff
-FLOUCI_APP_TOKEN=d01440af-5a3b-4c9f-8567-6c0f964d1ef7
-FLOUCI_DEVELOPER_TRACKING_ID=a702c74a-9a4d-4f36-b18d-b76f63b7bef8
+FLOUCI_APP_PUBLIC=your_flouci_app_public
+FLOUCI_APP_SECRET=your_flouci_app_secret
+FLOUCI_APP_TOKEN=your_flouci_app_token
+FLOUCI_DEVELOPER_TRACKING_ID=your_flouci_tracking_id
 
-# Redis Configuration
-REDIS_HOST=localhost
+# Redis Configuration (si utilisé)
+REDIS_HOST=your_redis_host
 REDIS_PORT=6379
-REDIS_PASSWORD=
+REDIS_PASSWORD=your_redis_password
 REDIS_DATABASE=0
 ```
+
+💡 **Astuce** : Sur Railway, allez dans votre projet → Service → Variables et collez vos vraies valeurs depuis votre `.env` local.
 
 ### Important :
 

@@ -14,9 +14,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class BackendBookifySaasApplication {
 
-    static Dotenv dotenv = Dotenv.configure().load();
+    static Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
     private static final String GEMINI_API_KEY = dotenv.get("GEMINI_API_KEY");
-    private static final String SPRING_MAIL_PASSWORD = dotenv.get("SPRING_MAIL_PASSWORD") ;
+    private static final String SPRING_MAIL_PASSWORD = dotenv.get("SPRING_MAIL_PASSWORD");
 
     public static void main(String[] args) {
         SpringApplication.run(BackendBookifySaasApplication.class, args);
