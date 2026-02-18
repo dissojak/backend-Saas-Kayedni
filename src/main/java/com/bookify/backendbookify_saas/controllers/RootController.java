@@ -9,9 +9,9 @@ import java.util.Map;
 
 /**
  * Root controller for Railway health checks and API information
+ * This controller responds at the ROOT level (not under /api context path)
  */
 @RestController
-@RequestMapping("/")
 public class RootController {
 
     @GetMapping
