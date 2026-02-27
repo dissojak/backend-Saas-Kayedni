@@ -82,6 +82,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/staff/*/availabilities", "/v1/staff/*/availabilities", "/api/v1/staff/{staffId}/availabilities", "/v1/staff/{staffId}/availabilities").permitAll()
                         // Explicit GET permit for business services listing (public endpoint)
                         .requestMatchers(HttpMethod.GET, "/api/v1/businesses/*/services", "/v1/businesses/*/services").permitAll()
+                        // Public recent reviews endpoint for testimonials on landing page
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ratings/recent", "/v1/ratings/recent").permitAll()
                         // Make the admin login page public
                         .requestMatchers(HttpMethod.GET, "/LoginAdmin.html").permitAll()
                         // Make common static resources public (CSS/JS/images/etc.)

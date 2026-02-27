@@ -306,6 +306,85 @@ public class RatingServiceImpl {
     }
 
     /**
+     * Get recent high-quality reviews for testimonials (public, no auth required).
+     * Returns reviews with scores >= 4 ordered by creation date.
+     * Combines both service and business ratings.
+     */
+    @Transactional(readOnly = true)
+    public List<RatingResponse> getRecentReviews(int limit) {
+        // Get recent service ratings with score >= 4 and comments
+        List<ServiceRating> serviceRatings = entityManager.createQuery(
+                "SELECT sr FROM ServiceRating sr " +
+                "JOIN FETCH sr.client " +
+                "JOIN FETCH sr.service s " +
+                "LEFT JOIN FETCH s.business " +
+                "WHERE sr.score >= 4 AND sr.comment IS NOT NULL AND LENGTH(sr.comment) > 20 " +
+                "ORDER BY sr.createdAt DESC", ServiceRating.class)
+                .setMaxResults(limit)
+                .getResultList();
+
+        // Get recent business ratings with score >= 4 and comments
+        List<BusinessRating> businessRatings = entityManager.createQuery(
+                "SELECT br FROM BusinessRating br " +
+                "JOIN FETCH br.client " +
+                "JOIN FETCH br.business " +
+                "WHERE br.score >= 4 AND br.comment IS NOT NULL AND LENGTH(br.comment) > 20 " +
+                "ORDER BY br.createdAt DESC", BusinessRating.class)
+                .setMaxResults(limit)
+                .getResultList();
+
+        // Convert and combine both lists
+        List<RatingResponse> reviews = new java.util.ArrayList<>();
+        
+        // Add service ratings
+        for (ServiceRating sr : serviceRatings) {
+            Long serviceId = sr.getService().getId();
+            String serviceName = sr.getService().getName();
+            Business business = sr.getService().getBusiness();
+            Long businessId = business != null ? business.getId() : null;
+            String businessName = business != null ? business.getName() : null;
+            String clientName = sr.getClient().getName();
+            
+            reviews.add(RatingResponse.builder()
+                    .serviceRatingId(sr.getId())
+                    .serviceId(serviceId)
+                    .serviceName(serviceName)
+                    .businessId(businessId)
+                    .businessName(businessName)
+                    .clientName(clientName)
+                    .serviceRating(sr.getScore())
+                    .serviceComment(sr.getComment())
+                    .serviceRatingDate(sr.getDate())
+                    .createdAt(sr.getCreatedAt())
+                    .build());
+        }
+        
+        // Add business ratings
+        for (BusinessRating br : businessRatings) {
+            Long businessId = br.getBusiness().getId();
+            String businessName = br.getBusiness().getName();
+            String clientName = br.getClient().getName();
+            
+            reviews.add(RatingResponse.builder()
+                    .businessRatingId(br.getId())
+                    .businessId(businessId)
+                    .businessName(businessName)
+                    .clientName(clientName)
+                    .businessRating(br.getScore())
+                    .businessComment(br.getComment())
+                    .businessRatingDate(br.getDate())
+                    .createdAt(br.getCreatedAt())
+                    .build());
+        }
+        
+        // Sort by creation date descending and limit
+        return reviews.stream()
+                .sorted((r1, r2) -> r2.getCreatedAt().compareTo(r1.getCreatedAt()))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Build a RatingResponse using primitive values instead of entities.
      * This completely avoids Hibernate lazy loading issues by never accessing entity proxies.
      */
