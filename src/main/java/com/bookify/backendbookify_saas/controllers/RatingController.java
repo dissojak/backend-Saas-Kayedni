@@ -180,4 +180,26 @@ public class RatingController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    /**
+     * Get recent high-quality reviews for testimonials (public endpoint).
+     * Returns recent reviews with scores >= 4, suitable for display in testimonials sections.
+     */
+    @GetMapping("/recent")
+    @Operation(summary = "Get recent reviews", description = "Get recent high-quality reviews for testimonials (public, no auth required)")
+    public ResponseEntity<?> getRecentReviews(
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        try {
+            if (limit < 1 || limit > 50) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Limit must be between 1 and 50"));
+            }
+            List<RatingResponse> reviews = ratingService.getRecentReviews(limit);
+            return ResponseEntity.ok(reviews);
+        } catch (Exception e) {
+            log.error("Error getting recent reviews: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to get recent reviews"));
+        }
+    }
 }
