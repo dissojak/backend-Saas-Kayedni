@@ -7,6 +7,7 @@ import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import com.bookify.backendbookify_saas.repositories.*;
 import com.bookify.backendbookify_saas.services.BookingService;
+import com.bookify.backendbookify_saas.services.BookingNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class BookingServiceImpl implements BookingService {
     private final StaffRepository staffRepository;
     private final StaffAvailabilityRepository staffAvailabilityRepository;
     private final BusinessRepository businessRepository;
+    private final BookingNotificationService bookingNotificationService;
 
     @Override
     @Transactional
@@ -162,6 +164,11 @@ public class BookingServiceImpl implements BookingService {
                 staff.getId(), request.getDate(), request.getStartTime(), request.getEndTime());
 
         ServiceBooking savedBooking = serviceBookingRepository.save(booking);
+
+        if (savedBooking.getStatus() == BookingStatusEnum.PENDING) {
+            bookingNotificationService.notifyStaffActionRequired(savedBooking);
+        }
+
         return mapToResponse(savedBooking);
     }
 
@@ -171,6 +178,8 @@ public class BookingServiceImpl implements BookingService {
         ServiceBooking existing = serviceBookingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
+        BookingStatusEnum previousStatus = existing.getStatus();
+
         existing.setDate(booking.getDate());
         existing.setStartTime(booking.getStartTime());
         existing.setEndTime(booking.getEndTime());
@@ -178,7 +187,11 @@ public class BookingServiceImpl implements BookingService {
         existing.setNotes(booking.getNotes());
         existing.setPrice(booking.getPrice());
 
-        return serviceBookingRepository.save(existing);
+        ServiceBooking saved = serviceBookingRepository.save(existing);
+        if (previousStatus != saved.getStatus()) {
+            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        }
+        return saved;
     }
 
     @Override
@@ -187,8 +200,12 @@ public class BookingServiceImpl implements BookingService {
         ServiceBooking booking = serviceBookingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
+        BookingStatusEnum previousStatus = booking.getStatus();
+
         booking.setStatus(status);
-        return serviceBookingRepository.save(booking);
+        ServiceBooking saved = serviceBookingRepository.save(booking);
+        bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        return saved;
     }
 
     @Override
@@ -272,11 +289,14 @@ public class BookingServiceImpl implements BookingService {
         ServiceBooking booking = serviceBookingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
+        BookingStatusEnum previousStatus = booking.getStatus();
+
         booking.setStatus(BookingStatusEnum.CANCELLED);
         if (reason != null && !reason.isBlank()) {
             booking.setNotes((booking.getNotes() != null ? booking.getNotes() + "\n" : "") + "Cancellation reason: " + reason);
         }
-        serviceBookingRepository.save(booking);
+        ServiceBooking saved = serviceBookingRepository.save(booking);
+        bookingNotificationService.notifyStatusChange(saved, previousStatus);
     }
 
     @Override
@@ -319,6 +339,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         // Update booking
+        BookingStatusEnum previousStatus = booking.getStatus();
         booking.setDate(newDate);
         booking.setStartTime(newStartTime);
         booking.setEndTime(newEndTime);
@@ -329,6 +350,7 @@ public class BookingServiceImpl implements BookingService {
         // Re-fetch with all associations to avoid lazy loading issues when mapping to response
         ServiceBooking saved = serviceBookingRepository.findByIdWithServiceAndBusiness(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found after save"));
+        bookingNotificationService.notifyStatusChange(saved, previousStatus);
         return mapToResponse(saved);
     }
 
