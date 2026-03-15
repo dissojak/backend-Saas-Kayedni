@@ -53,6 +53,9 @@ public abstract class Booking {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "reminder_sent_at")
+    private LocalDateTime reminderSentAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

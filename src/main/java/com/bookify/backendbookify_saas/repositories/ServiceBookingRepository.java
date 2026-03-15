@@ -148,4 +148,20 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
        @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
        @Query("DELETE FROM ServiceBooking sb WHERE sb.businessClient.id = :businessClientId AND sb.status IN :statuses")
        void deleteByBusinessClientIdAndStatusIn(@Param("businessClientId") Long businessClientId, @Param("statuses") java.util.List<com.bookify.backendbookify_saas.models.enums.BookingStatusEnum> statuses);
+
+       /**
+        * Reminder candidates for the target date window, excluding already notified bookings.
+        */
+       @Query("SELECT DISTINCT sb FROM ServiceBooking sb " +
+                 "LEFT JOIN FETCH sb.service s " +
+                 "LEFT JOIN FETCH s.business " +
+                 "LEFT JOIN FETCH sb.staff " +
+                 "LEFT JOIN FETCH sb.client " +
+                 "LEFT JOIN FETCH sb.businessClient " +
+                 "WHERE sb.status = :status " +
+                 "AND sb.date BETWEEN :fromDate AND :toDate " +
+                 "AND sb.reminderSentAt IS NULL")
+       List<ServiceBooking> findReminderCandidates(@Param("status") BookingStatusEnum status,
+                                                                                    @Param("fromDate") LocalDate fromDate,
+                                                                                    @Param("toDate") LocalDate toDate);
 }
