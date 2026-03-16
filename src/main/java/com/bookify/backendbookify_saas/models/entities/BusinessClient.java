@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+
 /**
  * Entity representing a client that belongs to a specific business.
  * This is different from a global User - it's a business-specific contact.
@@ -35,6 +36,9 @@ public class BusinessClient {
 
     @Column(nullable = false)
     private String phone;
+
+    @Column(name = "telegram_chat_id")
+    private String telegramChatId;
 
     @Column
     private String email;

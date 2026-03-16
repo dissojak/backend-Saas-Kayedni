@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+
 @Repository
 public interface BusinessClientRepository extends JpaRepository<BusinessClient, Long> {
 
@@ -24,6 +25,11 @@ public interface BusinessClientRepository extends JpaRepository<BusinessClient, 
      * Check if a phone number already exists for a business
      */
     boolean existsByBusinessIdAndPhone(Long businessId, String phone);
+
+    /**
+     * Find clients by phone number across businesses.
+     */
+    List<BusinessClient> findByPhone(String phone);
 
     /**
      * Delete all clients belonging to a business

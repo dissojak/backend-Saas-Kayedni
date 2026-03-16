@@ -89,9 +89,9 @@ public class BookingNotificationService {
         sendStatusTelegram(booking, effectiveStatus, body);
     }
 
-    public void sendReminder(ServiceBooking booking, long minutesBefore) {
+    public boolean sendReminder(ServiceBooking booking, long minutesBefore) {
         if (!notificationsEnabled || booking == null) {
-            return;
+            return false;
         }
 
         String subject = "[Kayedni] Reminder: your booking starts in " + minutesBefore + " minutes";
@@ -106,14 +106,21 @@ public class BookingNotificationService {
                 booking.getStatus().name()
         );
 
-        sendClientEmail(booking, subject, body, htmlBody);
+        boolean emailSent = sendClientEmail(booking, subject, body, htmlBody);
 
         String reminderText = buildReminderTelegramText(booking, minutesBefore);
         String replyMarkup = buildReminderReplyMarkup(booking);
-        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, reminderText, replyMarkup);
-        if (!sent) {
-            sendTelegram(stripTelegramMarkdown(reminderText));
+        String recipientChatId = resolveRecipientChatId(booking);
+        if (recipientChatId == null) {
+            return emailSent;
         }
+
+        boolean telegramSent = sendTelegramMarkdownWithFallback(telegramBotToken, recipientChatId, reminderText, replyMarkup);
+        if (!telegramSent) {
+            telegramSent = sendTelegramToChatId(recipientChatId, stripTelegramMarkdown(reminderText));
+        }
+
+        return emailSent || telegramSent;
     }
 
     public void notifyStaffActionRequired(ServiceBooking booking) {
@@ -138,9 +145,14 @@ public class BookingNotificationService {
 
         String text = buildStaffComeNowTelegramText(booking);
         String replyMarkup = buildReminderReplyMarkup(booking);
-        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+        String recipientChatId = resolveRecipientChatId(booking);
+        if (recipientChatId == null) {
+            return;
+        }
+
+        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, recipientChatId, text, replyMarkup);
         if (!sent) {
-            sendTelegram(stripTelegramMarkdown(text));
+            sendTelegramToChatId(recipientChatId, stripTelegramMarkdown(text));
         }
     }
 
@@ -166,12 +178,12 @@ public class BookingNotificationService {
         }
     }
 
-    private void sendClientEmail(ServiceBooking booking, String subject, String plainBody, String htmlBody) {
+    private boolean sendClientEmail(ServiceBooking booking, String subject, String plainBody, String htmlBody) {
         try {
             String clientEmail = extractClientEmail(booking);
             if (clientEmail == null || clientEmail.isBlank()) {
                 log.warn("Skipping booking email notification for booking {} because client email is missing", booking.getId());
-                return;
+                return false;
             }
 
             MimeMessage msg = mailSender.createMimeMessage();
@@ -181,6 +193,7 @@ public class BookingNotificationService {
             helper.setSubject(subject);
             helper.setText(plainBody, htmlBody);
             mailSender.send(msg);
+            return true;
         } catch (Exception e) {
             log.warn("Failed to send booking email notification for booking {}: {}", booking.getId(), e.getMessage());
             // Fallback to plain text if HTML send fails for any reason.
@@ -188,21 +201,23 @@ public class BookingNotificationService {
                 String clientEmail = extractClientEmail(booking);
                 if (clientEmail != null && !clientEmail.isBlank()) {
                     mailService.sendSimpleMessage(clientEmail, subject, plainBody);
+                    return true;
                 }
             } catch (Exception inner) {
                 log.warn("Fallback plain email also failed for booking {}: {}", booking.getId(), inner.getMessage());
             }
+            return false;
         }
     }
 
-    private void sendTelegram(String text) {
+    private boolean sendTelegramToChatId(String chatId, String text) {
         if (!telegramEnabled
                 || telegramBotToken == null || telegramBotToken.isBlank()
-                || telegramDefaultChatId == null || telegramDefaultChatId.isBlank()) {
-            return;
+                || chatId == null || chatId.isBlank()) {
+            return false;
         }
 
-        sendTelegramWithBot(telegramBotToken, telegramDefaultChatId, text);
+        return sendTelegramWithBot(telegramBotToken, chatId, text, null, null);
     }
 
     private void sendTelegramWithBot(String botToken, String chatId, String text) {
@@ -510,23 +525,28 @@ public class BookingNotificationService {
     }
 
     private void sendStatusTelegram(ServiceBooking booking, String effectiveStatus, String plainFallbackBody) {
+        String recipientChatId = resolveRecipientChatId(booking);
+        if (recipientChatId == null) {
+            return;
+        }
+
         if ("CONFIRMED".equals(effectiveStatus)) {
             String text = buildConfirmedTelegramText(booking);
             String replyMarkup = buildConfirmedReplyMarkup(booking);
-            boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+            boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, recipientChatId, text, replyMarkup);
             if (!sent) {
-                sendTelegram(stripTelegramMarkdown(text));
+                sendTelegramToChatId(recipientChatId, stripTelegramMarkdown(text));
             }
             return;
         }
 
         if ("REJECTED".equals(effectiveStatus) || "CANCELED".equals(effectiveStatus)) {
-            sendCancelRejectTelegram(booking, effectiveStatus);
+            sendCancelRejectTelegram(booking, effectiveStatus, recipientChatId);
             return;
         }
 
         // For other statuses, keep the default plain update format.
-        sendTelegram(plainFallbackBody);
+        sendTelegramToChatId(recipientChatId, plainFallbackBody);
     }
 
         private String buildConfirmedTelegramText(ServiceBooking booking) {
@@ -632,19 +652,57 @@ public class BookingNotificationService {
 
     // ─── Rich cancel/reject Telegram ─────────────────────────────────────────
 
-    private void sendCancelRejectTelegram(ServiceBooking booking, String effectiveStatus) {
+    private void sendCancelRejectTelegram(ServiceBooking booking, String effectiveStatus, String recipientChatId) {
         if (!telegramEnabled
                 || telegramBotToken == null || telegramBotToken.isBlank()
-                || telegramDefaultChatId == null || telegramDefaultChatId.isBlank()) {
+                || recipientChatId == null || recipientChatId.isBlank()) {
             return;
         }
 
         String text = buildCancelRejectTelegramText(booking, effectiveStatus);
         String replyMarkup = buildCancelRejectReplyMarkup(booking);
-        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, recipientChatId, text, replyMarkup);
         if (!sent) {
-            sendTelegram(stripTelegramMarkdown(text));
+            sendTelegramToChatId(recipientChatId, stripTelegramMarkdown(text));
         }
+    }
+
+    private String resolveRecipientChatId(ServiceBooking booking) {
+        if (!telegramEnabled || booking == null) {
+            return null;
+        }
+
+        // BusinessClient bookings must not leak to default chat.
+        if (booking.getBusinessClient() != null) {
+            String businessClientTarget = normalizeRecipient(booking.getBusinessClient().getTelegramChatId());
+            if (businessClientTarget == null) {
+                log.info("Skipping telegram for booking {}: business client has not linked Telegram chat id", booking.getId());
+            }
+            return businessClientTarget;
+        }
+
+        if (booking.getClient() != null) {
+            String userTarget = normalizeRecipient(booking.getClient().getTelegramChatId());
+            if (userTarget == null) {
+                log.info("Skipping telegram for booking {}: client has not linked Telegram chat id", booking.getId());
+            }
+            return userTarget;
+        }
+
+        return null;
+    }
+
+    private String normalizeRecipient(String raw) {
+        if (raw == null) {
+            return null;
+        }
+
+        String value = raw.trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+
+        return value.isBlank() ? null : value;
     }
 
     private String buildCancelRejectTelegramText(ServiceBooking booking, String effectiveStatus) {

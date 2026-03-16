@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -92,10 +93,14 @@ public class BookingReminderScheduler {
                     continue;
                 }
 
-                bookingNotificationService.sendReminder(booking, minutesBefore);
-                booking.setReminderSentAt(LocalDateTime.now());
-                serviceBookingRepository.save(booking);
-                sent++;
+                boolean delivered = bookingNotificationService.sendReminder(booking, minutesBefore);
+                if (delivered) {
+                    booking.setReminderSentAt(LocalDateTime.now());
+                    serviceBookingRepository.save(booking);
+                    sent++;
+                } else {
+                    log.warn("Reminder not delivered for booking {} (no successful channel). Will retry on next scheduler run.", booking.getId());
+                }
             }
 
             if (sent > 0) {

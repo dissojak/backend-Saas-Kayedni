@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
 /**
  * Entity representing all users in the system.
  * Users are differentiated by their role (CLIENT, BUSINESS_OWNER, ADMIN, STAFF).
@@ -41,6 +42,9 @@ public class User {
     private String password;
 
     private String phoneNumber;
+
+    @Column(name = "telegram_chat_id")
+    private String telegramChatId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
