@@ -16,8 +16,9 @@ import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
+
 
 
 /**
@@ -164,10 +165,10 @@ public class BookingServiceImpl implements BookingService {
         log.info("Creating booking: staffId={}, date={}, time={}-{}", 
                 staff.getId(), request.getDate(), request.getStartTime(), request.getEndTime());
 
-        ServiceBooking savedBooking = serviceBookingRepository.save(booking);
+        ServiceBooking savedBooking = serviceBookingRepository.saveAndFlush(booking);
 
         if (savedBooking.getStatus() == BookingStatusEnum.PENDING) {
-            bookingNotificationService.notifyStaffActionRequired(savedBooking);
+            safeNotifyStaffActionRequired(savedBooking);
         }
 
         return mapToResponse(savedBooking);
@@ -188,9 +189,9 @@ public class BookingServiceImpl implements BookingService {
         existing.setNotes(booking.getNotes());
         existing.setPrice(booking.getPrice());
 
-        ServiceBooking saved = serviceBookingRepository.save(existing);
+        ServiceBooking saved = serviceBookingRepository.saveAndFlush(existing);
         if (previousStatus != saved.getStatus()) {
-            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+            safeNotifyStatusChange(saved, previousStatus);
         }
         return saved;
     }
@@ -204,8 +205,8 @@ public class BookingServiceImpl implements BookingService {
         BookingStatusEnum previousStatus = booking.getStatus();
 
         booking.setStatus(status);
-        ServiceBooking saved = serviceBookingRepository.save(booking);
-        bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        ServiceBooking saved = serviceBookingRepository.saveAndFlush(booking);
+        safeNotifyStatusChange(saved, previousStatus);
         return saved;
     }
 
@@ -308,11 +309,11 @@ public class BookingServiceImpl implements BookingService {
             booking.setCancellationReason(reason.trim());
         }
 
-        ServiceBooking saved = serviceBookingRepository.save(booking);
+        ServiceBooking saved = serviceBookingRepository.saveAndFlush(booking);
         if (initiatedByClient) {
-            bookingNotificationService.notifyStaffClientCancellation(saved, previousStatus);
+            safeNotifyStaffClientCancellation(saved, previousStatus);
         } else {
-            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+            safeNotifyStatusChange(saved, previousStatus);
         }
     }
 
@@ -371,17 +372,49 @@ public class BookingServiceImpl implements BookingService {
         booking.setEndTime(newEndTime);
         booking.setStatus(BookingStatusEnum.PENDING); // Reset to pending after reschedule
         
-        serviceBookingRepository.save(booking);
+        serviceBookingRepository.saveAndFlush(booking);
         
         // Re-fetch with all associations to avoid lazy loading issues when mapping to response
         ServiceBooking saved = serviceBookingRepository.findByIdWithServiceAndBusiness(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found after save"));
         if (initiatedByClient) {
-            bookingNotificationService.notifyStaffClientReschedule(saved, oldDate, oldStart, oldEnd);
+            safeNotifyStaffClientReschedule(saved, oldDate, oldStart, oldEnd);
         } else {
-            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+            safeNotifyStatusChange(saved, previousStatus);
         }
         return mapToResponse(saved);
+    }
+
+    private void safeNotifyStatusChange(ServiceBooking booking, BookingStatusEnum previousStatus) {
+        try {
+            bookingNotificationService.notifyStatusChange(booking, previousStatus);
+        } catch (Exception e) {
+            log.warn("Booking {} status persisted but status notification failed: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private void safeNotifyStaffActionRequired(ServiceBooking booking) {
+        try {
+            bookingNotificationService.notifyStaffActionRequired(booking);
+        } catch (Exception e) {
+            log.warn("Booking {} persisted but staff action-required notification failed: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private void safeNotifyStaffClientCancellation(ServiceBooking booking, BookingStatusEnum previousStatus) {
+        try {
+            bookingNotificationService.notifyStaffClientCancellation(booking, previousStatus);
+        } catch (Exception e) {
+            log.warn("Booking {} cancellation persisted but staff cancellation notification failed: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private void safeNotifyStaffClientReschedule(ServiceBooking booking, LocalDate oldDate, LocalTime oldStart, LocalTime oldEnd) {
+        try {
+            bookingNotificationService.notifyStaffClientReschedule(booking, oldDate, oldStart, oldEnd);
+        } catch (Exception e) {
+            log.warn("Booking {} reschedule persisted but staff reschedule notification failed: {}", booking.getId(), e.getMessage());
+        }
     }
 
     /**
