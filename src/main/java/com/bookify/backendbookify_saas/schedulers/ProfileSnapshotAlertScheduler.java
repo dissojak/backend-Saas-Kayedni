@@ -75,11 +75,19 @@ public class ProfileSnapshotAlertScheduler {
     @Scheduled(cron = "0 */15 * * * *")
     public void checkProfileSnapshotHealth() {
         if (!alertsEnabled) {
+            log.debug("Profile snapshot alert scheduler skipped (alerts disabled)");
             return;
         }
-        sendRunFailureAlerts();
-        sendStaleSyncAlerts();
-        sendFallbackUsageAlerts();
+
+        log.debug("Profile snapshot alert scheduler started");
+        try {
+            sendRunFailureAlerts();
+            sendStaleSyncAlerts();
+            sendFallbackUsageAlerts();
+            log.debug("Profile snapshot alert scheduler finished");
+        } catch (Exception ex) {
+            log.error("Profile snapshot alert scheduler failed", ex);
+        }
     }
 
     private void sendRunFailureAlerts() {

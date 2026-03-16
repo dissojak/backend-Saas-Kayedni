@@ -159,9 +159,40 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
                  "LEFT JOIN FETCH sb.client " +
                  "LEFT JOIN FETCH sb.businessClient " +
                  "WHERE sb.status = :status " +
-                 "AND sb.date BETWEEN :fromDate AND :toDate " +
+                 "AND sb.date = :date " +
+                 "AND sb.startTime >= :fromTime " +
+                 "AND sb.startTime < :toTime " +
                  "AND sb.reminderSentAt IS NULL")
-       List<ServiceBooking> findReminderCandidates(@Param("status") BookingStatusEnum status,
-                                                                                    @Param("fromDate") LocalDate fromDate,
-                                                                                    @Param("toDate") LocalDate toDate);
+       List<ServiceBooking> findReminderCandidatesForDateWindow(@Param("status") BookingStatusEnum status,
+                                                                @Param("date") LocalDate date,
+                                                                @Param("fromTime") LocalTime fromTime,
+                                                                @Param("toTime") LocalTime toTime);
+
+       @Query("SELECT DISTINCT sb FROM ServiceBooking sb " +
+                 "LEFT JOIN FETCH sb.service s " +
+                 "LEFT JOIN FETCH s.business " +
+                 "LEFT JOIN FETCH sb.staff " +
+                 "LEFT JOIN FETCH sb.client " +
+                 "LEFT JOIN FETCH sb.businessClient " +
+                 "WHERE sb.status = :status " +
+                 "AND sb.date = :date " +
+                 "AND sb.startTime >= :fromTime " +
+                 "AND sb.reminderSentAt IS NULL")
+       List<ServiceBooking> findReminderCandidatesFromTime(@Param("status") BookingStatusEnum status,
+                                                           @Param("date") LocalDate date,
+                                                           @Param("fromTime") LocalTime fromTime);
+
+       @Query("SELECT DISTINCT sb FROM ServiceBooking sb " +
+                 "LEFT JOIN FETCH sb.service s " +
+                 "LEFT JOIN FETCH s.business " +
+                 "LEFT JOIN FETCH sb.staff " +
+                 "LEFT JOIN FETCH sb.client " +
+                 "LEFT JOIN FETCH sb.businessClient " +
+                 "WHERE sb.status = :status " +
+                 "AND sb.date = :date " +
+                 "AND sb.startTime < :toTime " +
+                 "AND sb.reminderSentAt IS NULL")
+       List<ServiceBooking> findReminderCandidatesUntilTime(@Param("status") BookingStatusEnum status,
+                                                            @Param("date") LocalDate date,
+                                                            @Param("toTime") LocalTime toTime);
 }
