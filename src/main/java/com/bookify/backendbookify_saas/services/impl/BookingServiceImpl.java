@@ -6,18 +6,19 @@ import com.bookify.backendbookify_saas.models.entities.*;
 import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import com.bookify.backendbookify_saas.repositories.*;
-import com.bookify.backendbookify_saas.services.BookingService;
 import com.bookify.backendbookify_saas.services.BookingNotificationService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.bookify.backendbookify_saas.services.BookingService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 
 /**
  * Implementation of BookingService with support for both User and BusinessClient.
@@ -286,6 +287,11 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void cancelServiceBooking(Long id, String reason) {
+        cancelServiceBooking(id, reason, false);
+    }
+
+    @Transactional
+    public void cancelServiceBooking(Long id, String reason, boolean initiatedByClient) {
         ServiceBooking booking = serviceBookingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
@@ -303,7 +309,11 @@ public class BookingServiceImpl implements BookingService {
         }
 
         ServiceBooking saved = serviceBookingRepository.save(booking);
-        bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        if (initiatedByClient) {
+            bookingNotificationService.notifyStaffClientCancellation(saved, previousStatus);
+        } else {
+            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        }
     }
 
     @Override
@@ -318,9 +328,18 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public ServiceBookingResponse rescheduleBooking(Long bookingId, LocalDate newDate, LocalTime newStartTime, LocalTime newEndTime) {
+        return rescheduleBooking(bookingId, newDate, newStartTime, newEndTime, false);
+    }
+
+    @Transactional
+    public ServiceBookingResponse rescheduleBooking(Long bookingId, LocalDate newDate, LocalTime newStartTime, LocalTime newEndTime, boolean initiatedByClient) {
         // Use the query that eagerly loads Service and Business to avoid LAZY loading issues
         ServiceBooking booking = serviceBookingRepository.findByIdWithServiceAndBusiness(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        LocalDate oldDate = booking.getDate();
+        LocalTime oldStart = booking.getStartTime();
+        LocalTime oldEnd = booking.getEndTime();
 
         // Validate booking can be rescheduled (not cancelled or completed)
         if (booking.getStatus() == BookingStatusEnum.CANCELLED || booking.getStatus() == BookingStatusEnum.COMPLETED) {
@@ -357,7 +376,11 @@ public class BookingServiceImpl implements BookingService {
         // Re-fetch with all associations to avoid lazy loading issues when mapping to response
         ServiceBooking saved = serviceBookingRepository.findByIdWithServiceAndBusiness(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found after save"));
-        bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        if (initiatedByClient) {
+            bookingNotificationService.notifyStaffClientReschedule(saved, oldDate, oldStart, oldEnd);
+        } else {
+            bookingNotificationService.notifyStatusChange(saved, previousStatus);
+        }
         return mapToResponse(saved);
     }
 
@@ -459,3 +482,4 @@ public class BookingServiceImpl implements BookingService {
                 .collect(Collectors.toList());
     }
 }
+

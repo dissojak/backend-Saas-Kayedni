@@ -10,7 +10,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -142,6 +144,28 @@ public class BookingNotificationService {
         }
     }
 
+    public void notifyStaffClientCancellation(ServiceBooking booking, BookingStatusEnum previousStatus) {
+        if (!notificationsEnabled || !staffAlertEnabled || booking == null) {
+            return;
+        }
+
+        String text = buildStaffClientCancellationText(booking, previousStatus);
+        sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text, null, null);
+    }
+
+    public void notifyStaffClientReschedule(ServiceBooking booking, LocalDate oldDate, LocalTime oldStart, LocalTime oldEnd) {
+        if (!notificationsEnabled || !staffAlertEnabled || booking == null) {
+            return;
+        }
+
+        String text = buildStaffClientRescheduleText(booking, oldDate, oldStart, oldEnd);
+        String callbackReplyMarkup = buildStaffActionRequiredReplyMarkup(booking);
+        boolean sent = sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text, null, callbackReplyMarkup);
+        if (!sent) {
+            sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text, null, null);
+        }
+    }
+
     private void sendClientEmail(ServiceBooking booking, String subject, String plainBody, String htmlBody) {
         try {
             String clientEmail = extractClientEmail(booking);
@@ -241,6 +265,46 @@ public class BookingNotificationService {
             + "Price: " + booking.getPrice() + "\n"
             + "Notes: " + valueOrDash(booking.getNotes()) + "\n\n"
                 + "Booking ID: " + booking.getId() + "-Kayedni-Booking";
+    }
+
+    private String buildStaffClientCancellationText(ServiceBooking booking, BookingStatusEnum previousStatus) {
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        String clientName = extractClientName(booking);
+        String clientPhone = extractClientPhone(booking);
+        String action = previousStatus == BookingStatusEnum.PENDING ? "rejected" : "cancelled";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Client ").append(action).append(" booking\n\n");
+        sb.append("Client: ").append(clientName).append("\n");
+        sb.append("Service: ").append(serviceName).append("\n");
+        sb.append("Date: ").append(booking.getDate()).append("\n");
+        sb.append("Time: ").append(booking.getStartTime()).append(" - ").append(booking.getEndTime()).append("\n");
+        sb.append("Client Phone: ").append(valueOrDash(clientPhone)).append("\n");
+        if (booking.getCancellationReason() != null && !booking.getCancellationReason().isBlank()) {
+            sb.append("Reason: ").append(booking.getCancellationReason()).append("\n");
+        }
+        sb.append("\nBooking ID: ").append(booking.getId()).append("-Kayedni-Booking");
+        return sb.toString();
+    }
+
+    private String buildStaffClientRescheduleText(ServiceBooking booking, LocalDate oldDate, LocalTime oldStart, LocalTime oldEnd) {
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        String clientName = extractClientName(booking);
+        String clientPhone = extractClientPhone(booking);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Client rescheduled booking - action required\n\n");
+        sb.append("Client: ").append(clientName).append("\n");
+        sb.append("Service: ").append(serviceName).append("\n");
+        sb.append("Old Date: ").append(oldDate).append("\n");
+        sb.append("Old Time: ").append(oldStart).append(" - ").append(oldEnd).append("\n");
+        sb.append("New Date: ").append(booking.getDate()).append("\n");
+        sb.append("New Time: ").append(booking.getStartTime()).append(" - ").append(booking.getEndTime()).append("\n");
+        sb.append("Status: ").append(booking.getStatus()).append("\n");
+        sb.append("Client Phone: ").append(valueOrDash(clientPhone)).append("\n");
+        sb.append("\nPlease accept or reject this reschedule request.\n");
+        sb.append("\nBooking ID: ").append(booking.getId()).append("-Kayedni-Booking");
+        return sb.toString();
     }
 
     private String buildStaffActionRequiredReplyMarkup(ServiceBooking booking) {

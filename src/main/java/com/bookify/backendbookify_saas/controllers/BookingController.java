@@ -188,11 +188,24 @@ public class BookingController {
     @Operation(summary = "Cancel a booking", description = "Cancel a booking with an optional reason")
     public ResponseEntity<?> cancelBooking(
             @PathVariable Long bookingId,
-            @RequestBody(required = false) Map<String, String> body
+            @RequestBody(required = false) Map<String, Object> body,
+            Authentication authentication
     ) {
         try {
-            String reason = body != null ? body.get("reason") : null;
-            bookingService.cancelServiceBooking(bookingId, reason);
+            var bookingOpt = bookingService.getServiceBookingById(bookingId);
+            if (bookingOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            var booking = bookingOpt.get();
+            String reason = body != null ? String.valueOf(body.getOrDefault("reason", "")) : null;
+            if (reason != null && reason.isBlank()) {
+                reason = null;
+            }
+
+            boolean initiatedByClient = parseBooleanFlag(body, "initiatedByClient")
+                    || isClientBookingInitiator(authentication, booking);
+            bookingService.cancelServiceBooking(bookingId, reason, initiatedByClient);
             return ResponseEntity.ok(Map.of("message", "Booking cancelled successfully"));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
@@ -244,30 +257,64 @@ public class BookingController {
     @Operation(summary = "Reschedule a booking", description = "Reschedule a booking to a new date and time")
     public ResponseEntity<?> rescheduleBooking(
             @PathVariable Long bookingId,
-            @RequestBody Map<String, String> body
+            @RequestBody Map<String, Object> body,
+            Authentication authentication
     ) {
         try {
-            String newDate = body.get("date");
-            String newStartTime = body.get("startTime");
-            String newEndTime = body.get("endTime");
+            var bookingOpt = bookingService.getServiceBookingById(bookingId);
+            if (bookingOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            var booking = bookingOpt.get();
+            String newDate = body.get("date") != null ? String.valueOf(body.get("date")) : null;
+            String newStartTime = body.get("startTime") != null ? String.valueOf(body.get("startTime")) : null;
+            Object endTimeObj = body.get("endTime");
+            String newEndTime = endTimeObj != null ? String.valueOf(endTimeObj) : null;
             
-            if (newDate == null || newStartTime == null) {
+            if (newDate == null || newDate.isBlank() || newStartTime == null || newStartTime.isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Date and start time are required"));
             }
             
             LocalDate date = LocalDate.parse(newDate);
             java.time.LocalTime startTime = java.time.LocalTime.parse(newStartTime);
-            java.time.LocalTime endTime = newEndTime != null 
+            java.time.LocalTime endTime = newEndTime != null && !newEndTime.isBlank()
                 ? java.time.LocalTime.parse(newEndTime) 
                 : null;
+            boolean initiatedByClient = parseBooleanFlag(body, "initiatedByClient")
+                    || isClientBookingInitiator(authentication, booking);
             
-            ServiceBookingResponse response = bookingService.rescheduleBooking(bookingId, date, startTime, endTime);
+            ServiceBookingResponse response = bookingService.rescheduleBooking(bookingId, date, startTime, endTime, initiatedByClient);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (RuntimeException e) {
             log.error("Reschedule failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    private boolean parseBooleanFlag(Map<String, Object> body, String key) {
+        if (body == null || !body.containsKey(key)) {
+            return false;
+        }
+        Object value = body.get(key);
+        if (value instanceof Boolean boolValue) {
+            return boolValue;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    private boolean isClientBookingInitiator(Authentication authentication, com.bookify.backendbookify_saas.models.entities.ServiceBooking booking) {
+        if (authentication == null || booking == null || booking.getClient() == null) {
+            return false;
+        }
+
+        try {
+            Long authUserId = Long.parseLong(authentication.getName());
+            return booking.getClient().getId().equals(authUserId);
+        } catch (Exception ignored) {
+            return false;
         }
     }
 }
