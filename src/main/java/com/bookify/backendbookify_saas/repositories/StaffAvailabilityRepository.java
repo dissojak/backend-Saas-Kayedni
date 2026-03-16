@@ -1,15 +1,17 @@
 package com.bookify.backendbookify_saas.repositories;
 
 import com.bookify.backendbookify_saas.models.entities.StaffAvailability;
+import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface StaffAvailabilityRepository extends JpaRepository<StaffAvailability, Long> {
@@ -74,7 +76,7 @@ public interface StaffAvailabilityRepository extends JpaRepository<StaffAvailabi
            "WHERE sa.staff.business.id = :businessId AND sa.date BETWEEN :start AND :end " +
            "AND (FUNCTION('DAYOFWEEK', sa.date) = :dow OR FUNCTION('DAYOFWEEK', sa.date) = 1) " +
            "AND sa.userEdited = false AND sa.status <> :status")
-    int bulkUpdateStatusToClosedForBusinessInRange(@Param("businessId") Long businessId, @Param("start") LocalDate start, @Param("end") LocalDate end, @Param("dow") int mysqlDayOfWeek, @Param("status") String status);
+       int bulkUpdateStatusToClosedForBusinessInRange(@Param("businessId") Long businessId, @Param("start") LocalDate start, @Param("end") LocalDate end, @Param("dow") int mysqlDayOfWeek, @Param("status") AvailabilityStatus status);
 
     /**
      * Bulk update: set status to AVAILABLE for rows matching business and date condition (not Sunday AND not the weekend day)
@@ -84,7 +86,7 @@ public interface StaffAvailabilityRepository extends JpaRepository<StaffAvailabi
            "WHERE sa.staff.business.id = :businessId AND sa.date BETWEEN :start AND :end " +
            "AND (FUNCTION('DAYOFWEEK', sa.date) <> :dow AND FUNCTION('DAYOFWEEK', sa.date) <> 1) " +
            "AND sa.userEdited = false AND sa.status <> :status")
-    int bulkUpdateStatusToAvailableForBusinessInRange(@Param("businessId") Long businessId, @Param("start") LocalDate start, @Param("end") LocalDate end, @Param("dow") int mysqlDayOfWeek, @Param("status") String status);
+       int bulkUpdateStatusToAvailableForBusinessInRange(@Param("businessId") Long businessId, @Param("start") LocalDate start, @Param("end") LocalDate end, @Param("dow") int mysqlDayOfWeek, @Param("status") AvailabilityStatus status);
 
     /**
      * NEW: Return the maximum date available for a specific staff (used to build the calendar end date).

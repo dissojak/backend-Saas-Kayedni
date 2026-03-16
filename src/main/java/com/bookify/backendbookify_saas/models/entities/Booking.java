@@ -44,6 +44,9 @@ public abstract class Booking {
     @Column(length = 1000)
     private String notes;
 
+    @Column(name = "cancellation_reason", length = 1000)
+    private String cancellationReason;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 

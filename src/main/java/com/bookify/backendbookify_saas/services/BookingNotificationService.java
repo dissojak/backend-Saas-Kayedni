@@ -5,6 +5,13 @@ import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.LocalDateTime;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,12 +19,6 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -59,7 +60,19 @@ public class BookingNotificationService {
             return;
         }
 
+        if (booking.getStatus() == BookingStatusEnum.COMPLETED) {
+            return;
+        }
+
         String effectiveStatus = resolveStatusLabel(booking.getStatus(), previousStatus);
+
+        // Only notify for client-visible status outcomes.
+        if (!"CONFIRMED".equals(effectiveStatus)
+                && !"REJECTED".equals(effectiveStatus)
+                && !"CANCELED".equals(effectiveStatus)) {
+            return;
+        }
+
         String headline = buildStatusHeadline(effectiveStatus);
 
         String subject = "[Kayedni Booking Update] " + headline;
@@ -70,7 +83,8 @@ public class BookingNotificationService {
         String htmlBody = buildBookingHtml(booking, headline, "Booking Update", effectiveStatus);
 
         sendClientEmail(booking, subject, body, htmlBody);
-        sendTelegram(body);
+
+        sendStatusTelegram(booking, effectiveStatus, body);
     }
 
     public void sendReminder(ServiceBooking booking, long minutesBefore) {
@@ -91,7 +105,13 @@ public class BookingNotificationService {
         );
 
         sendClientEmail(booking, subject, body, htmlBody);
-        sendTelegram(body);
+
+        String reminderText = buildReminderTelegramText(booking, minutesBefore);
+        String replyMarkup = buildReminderReplyMarkup(booking);
+        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, reminderText, replyMarkup);
+        if (!sent) {
+            sendTelegram(stripTelegramMarkdown(reminderText));
+        }
     }
 
     public void notifyStaffActionRequired(ServiceBooking booking) {
@@ -100,7 +120,26 @@ public class BookingNotificationService {
         }
 
         String text = buildStaffActionRequiredText(booking);
-        sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text);
+        String callbackReplyMarkup = buildStaffActionRequiredReplyMarkup(booking);
+
+        // Callback buttons are Telegram-native and do not require public URLs.
+        boolean sent = sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text, null, callbackReplyMarkup);
+        if (!sent) {
+            sendTelegramWithBot(staffAlertTelegramBotToken, staffAlertTelegramChatId, text, null, null);
+        }
+    }
+
+    public void sendStaffComeNowReminder(ServiceBooking booking) {
+        if (!notificationsEnabled || booking == null) {
+            return;
+        }
+
+        String text = buildStaffComeNowTelegramText(booking);
+        String replyMarkup = buildReminderReplyMarkup(booking);
+        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+        if (!sent) {
+            sendTelegram(stripTelegramMarkdown(text));
+        }
     }
 
     private void sendClientEmail(ServiceBooking booking, String subject, String plainBody, String htmlBody) {
@@ -143,19 +182,32 @@ public class BookingNotificationService {
     }
 
     private void sendTelegramWithBot(String botToken, String chatId, String text) {
+        sendTelegramWithBot(botToken, chatId, text, null, null);
+    }
+
+    private boolean sendTelegramWithBot(String botToken, String chatId, String text, String parseMode, String replyMarkupJson) {
         if (botToken == null || botToken.isBlank() || chatId == null || chatId.isBlank()) {
-            return;
+            return false;
         }
 
         try {
             String url = "https://api.telegram.org/bot" + botToken + "/sendMessage";
-            String payload = "{\"chat_id\":\"" + escapeJson(chatId)
-                    + "\",\"text\":\"" + escapeJson(text) + "\"}";
+
+            StringBuilder payloadBuilder = new StringBuilder();
+            payloadBuilder.append("{\"chat_id\":\"").append(escapeJson(chatId)).append("\"");
+            payloadBuilder.append(",\"text\":\"").append(escapeJson(text)).append("\"");
+            if (parseMode != null && !parseMode.isBlank()) {
+                payloadBuilder.append(",\"parse_mode\":\"").append(escapeJson(parseMode)).append("\"");
+            }
+            if (replyMarkupJson != null && !replyMarkupJson.isBlank()) {
+                payloadBuilder.append(",\"reply_markup\":").append(replyMarkupJson);
+            }
+            payloadBuilder.append("}");
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .POST(HttpRequest.BodyPublishers.ofString(payloadBuilder.toString()))
                     .timeout(Duration.ofSeconds(5))
                     .build();
 
@@ -164,39 +216,38 @@ public class BookingNotificationService {
 
             if (response.statusCode() != 200) {
                 log.warn("Telegram booking notification returned {}: {}", response.statusCode(), response.body());
+                return false;
             }
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Telegram send interrupted: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
             log.warn("Failed to send Telegram booking notification: {}", e.getMessage());
+            return false;
         }
     }
 
     private String buildStaffActionRequiredText(ServiceBooking booking) {
-        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
-                ? booking.getService().getBusiness().getName()
-                : "Unknown";
         String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
-        Integer serviceDuration = booking.getService() != null ? booking.getService().getDurationMinutes() : null;
-        String staffName = booking.getStaff() != null ? booking.getStaff().getName() : "Unassigned";
         String clientName = extractClientName(booking);
         String clientPhone = extractClientPhone(booking);
 
-        return "[Kayedni Staff Alert]\n"
-                + "New booking requires action (Accept / Reject).\n\n"
-                + "Booking ID: " + booking.getId() + "-Kayedni-Booking\n"
-                + "Status: " + booking.getStatus() + "\n"
-                + "Business: " + businessName + "\n"
-                + "Staff: " + staffName + "\n"
-                + "Service: " + serviceName + (serviceDuration != null ? (" (" + serviceDuration + " min)") : "") + "\n"
+        return "New " + serviceName + " Booking From " + clientName + "\n\n"
                 + "Date: " + booking.getDate() + "\n"
                 + "Time: " + booking.getStartTime() + " - " + booking.getEndTime() + "\n"
-                + "Price: " + booking.getPrice() + "\n"
-                + "Client: " + clientName + "\n"
-                + "Client Phone: " + valueOrDash(clientPhone) + "\n"
-                + "Notes: " + valueOrDash(booking.getNotes()) + "\n"
-                + "Created At: " + LocalDateTime.now();
+            + "Client Phone: " + valueOrDash(clientPhone) + "\n"
+            + "Price: " + booking.getPrice() + "\n"
+            + "Notes: " + valueOrDash(booking.getNotes()) + "\n\n"
+                + "Booking ID: " + booking.getId() + "-Kayedni-Booking";
+    }
+
+    private String buildStaffActionRequiredReplyMarkup(ServiceBooking booking) {
+        return "{\"inline_keyboard\":["
+                + "[{\"text\":\"✅ Accept\",\"callback_data\":\"accept_" + booking.getId() + "\"},"
+                + "{\"text\":\"❌ Reject\",\"callback_data\":\"reject_" + booking.getId() + "\"}]"
+            + "]}";
     }
 
     private String buildBookingDetails(ServiceBooking booking, String headline, String eventType, String statusLabel) {
@@ -285,13 +336,11 @@ public class BookingNotificationService {
             }
 
     private String resolveStatusLabel(BookingStatusEnum currentStatus, BookingStatusEnum previousStatus) {
+        if (currentStatus == BookingStatusEnum.REJECTED) {
+            return "REJECTED";
+        }
         if (currentStatus == BookingStatusEnum.CANCELLED) {
-            if (previousStatus == BookingStatusEnum.CONFIRMED) {
-                return "CANCELED";
-            }
-            if (previousStatus == BookingStatusEnum.PENDING) {
-                return "REJECTED";
-            }
+            return "CANCELED";
         }
         return currentStatus.name();
     }
@@ -311,6 +360,160 @@ public class BookingNotificationService {
         }
         return "Booking " + effectiveStatus + " !";
     }
+
+    private String buildReminderTelegramText(ServiceBooking booking, long minutesBefore) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getName() : "Unknown";
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        Integer duration = booking.getService() != null ? booking.getService().getDurationMinutes() : null;
+        String staffName = booking.getStaff() != null ? booking.getStaff().getName() : "Unassigned";
+
+        String date = booking.getDate() != null
+                ? booking.getDate().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+                + " " + booking.getDate().getDayOfMonth()
+                + ", " + booking.getDate().getYear()
+                : "-";
+
+        String timeRange = booking.getStartTime() + " to " + booking.getEndTime();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("⏰ *Booking Reminder*\n\n");
+        sb.append("Your booking starts in *").append(minutesBefore).append(" minutes*.\n\n");
+        sb.append("*Service:* ").append(escapeTelegramMarkdown(serviceName));
+        if (duration != null) {
+            sb.append(" (").append(duration).append(" min)");
+        }
+        sb.append("\n");
+        sb.append("*Business:* ").append(escapeTelegramMarkdown(businessName)).append("\n");
+        sb.append("*Staff:* ").append(escapeTelegramMarkdown(staffName)).append("\n");
+        sb.append("*Date:* ").append(escapeTelegramMarkdown(date)).append("\n");
+        sb.append("*Time:* ").append(escapeTelegramMarkdown(timeRange)).append("\n\n");
+        sb.append("*Booking ID:* ").append(booking.getId()).append("-Kayedni-Booking");
+        return sb.toString();
+    }
+
+    private String buildStaffComeNowTelegramText(ServiceBooking booking) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getName() : "Unknown";
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        Integer duration = booking.getService() != null ? booking.getService().getDurationMinutes() : null;
+        String staffName = booking.getStaff() != null ? booking.getStaff().getName() : "Staff";
+
+        String date = booking.getDate() != null
+                ? booking.getDate().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+                + " " + booking.getDate().getDayOfMonth()
+                + ", " + booking.getDate().getYear()
+                : "-";
+
+        String timeRange = booking.getStartTime() + " to " + booking.getEndTime();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("🔔 *Message From Your Staff*\n\n");
+        sb.append("*").append(escapeTelegramMarkdown(staffName)).append("* from *")
+                .append(escapeTelegramMarkdown(businessName))
+                .append("* asks you to come now for your appointment.\n\n");
+        sb.append("*Service:* ").append(escapeTelegramMarkdown(serviceName));
+        if (duration != null) {
+            sb.append(" (").append(duration).append(" min)");
+        }
+        sb.append("\n");
+        sb.append("*Scheduled Date:* ").append(escapeTelegramMarkdown(date)).append("\n");
+        sb.append("*Scheduled Time:* ").append(escapeTelegramMarkdown(timeRange)).append("\n\n");
+        sb.append("If you're already on your way, you can ignore this reminder.\n\n");
+        sb.append("*Booking ID:* ").append(booking.getId()).append("-Kayedni-Booking");
+        return sb.toString();
+    }
+
+    private String buildReminderReplyMarkup(ServiceBooking booking) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getName() : "Business";
+        String businessPhone = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getPhone() : null;
+
+        String contactUrl = buildBusinessTelegramContactUrl(businessPhone);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"inline_keyboard\":[");
+        if (contactUrl != null) {
+            sb.append("[{\"text\":\"\\uD83D\\uDCAC Contact ")
+                    .append(escapeJson(businessName))
+                    .append("\",\"url\":\"")
+                    .append(escapeJson(contactUrl))
+                    .append("\"}]");
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    private void sendStatusTelegram(ServiceBooking booking, String effectiveStatus, String plainFallbackBody) {
+        if ("CONFIRMED".equals(effectiveStatus)) {
+            String text = buildConfirmedTelegramText(booking);
+            String replyMarkup = buildConfirmedReplyMarkup(booking);
+            boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+            if (!sent) {
+                sendTelegram(stripTelegramMarkdown(text));
+            }
+            return;
+        }
+
+        if ("REJECTED".equals(effectiveStatus) || "CANCELED".equals(effectiveStatus)) {
+            sendCancelRejectTelegram(booking, effectiveStatus);
+            return;
+        }
+
+        // For other statuses, keep the default plain update format.
+        sendTelegram(plainFallbackBody);
+    }
+
+        private String buildConfirmedTelegramText(ServiceBooking booking) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+            ? booking.getService().getBusiness().getName() : "Unknown";
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        Integer duration = booking.getService() != null ? booking.getService().getDurationMinutes() : null;
+        String staffName = booking.getStaff() != null ? booking.getStaff().getName() : "Unassigned";
+
+        String date = booking.getDate() != null
+            ? booking.getDate().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+            + " " + booking.getDate().getDayOfMonth()
+            + ", " + booking.getDate().getYear()
+            : "-";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("✅ *Booking Confirmed!*\n\n");
+        sb.append("Your appointment for *").append(escapeTelegramMarkdown(serviceName));
+        if (duration != null) {
+            sb.append(" (").append(duration).append(" min)");
+        }
+        sb.append("* at *").append(escapeTelegramMarkdown(businessName))
+            .append("* with *").append(escapeTelegramMarkdown(staffName))
+            .append("* on *").append(escapeTelegramMarkdown(date))
+            .append("* from *").append(escapeTelegramMarkdown(booking.getStartTime() + " to " + booking.getEndTime()))
+            .append("* is now confirmed.\n\n We look forward to seeing you!\n\n")
+            .append("*Booking ID:* ").append(booking.getId()).append("-Kayedni-Booking");
+
+        return sb.toString();
+        }
+
+        private String buildConfirmedReplyMarkup(ServiceBooking booking) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+            ? booking.getService().getBusiness().getName() : "Business";
+        String businessPhone = booking.getService() != null && booking.getService().getBusiness() != null
+            ? booking.getService().getBusiness().getPhone() : null;
+
+        String contactUrl = buildBusinessTelegramContactUrl(businessPhone);
+
+        StringBuilder sb = new StringBuilder();
+            sb.append("{\"inline_keyboard\":[");
+            if (contactUrl != null) {
+                sb.append("[{\"text\":\"\uD83D\uDCAC Contact ")
+                        .append(escapeJson(businessName))
+                        .append("\",\"url\":\"")
+                        .append(escapeJson(contactUrl))
+                        .append("\"}]");
+            }
+            sb.append("]}");
+        return sb.toString();
+        }
 
     private String extractClientName(ServiceBooking booking) {
         if (booking.getClient() != null) {
@@ -362,4 +565,139 @@ public class BookingNotificationService {
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
     }
+
+    // ─── Rich cancel/reject Telegram ─────────────────────────────────────────
+
+    private void sendCancelRejectTelegram(ServiceBooking booking, String effectiveStatus) {
+        if (!telegramEnabled
+                || telegramBotToken == null || telegramBotToken.isBlank()
+                || telegramDefaultChatId == null || telegramDefaultChatId.isBlank()) {
+            return;
+        }
+
+        String text = buildCancelRejectTelegramText(booking, effectiveStatus);
+        String replyMarkup = buildCancelRejectReplyMarkup(booking);
+        boolean sent = sendTelegramMarkdownWithFallback(telegramBotToken, telegramDefaultChatId, text, replyMarkup);
+        if (!sent) {
+            sendTelegram(stripTelegramMarkdown(text));
+        }
+    }
+
+    private String buildCancelRejectTelegramText(ServiceBooking booking, String effectiveStatus) {
+        boolean isRejected = "REJECTED".equals(effectiveStatus);
+
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getName() : "Unknown";
+        String serviceName = booking.getService() != null ? booking.getService().getName() : "Unknown";
+        Integer duration = booking.getService() != null ? booking.getService().getDurationMinutes() : null;
+        String staffName = booking.getStaff() != null ? booking.getStaff().getName() : "Unassigned";
+
+        // Format date nicely: "March 14, 2026"
+        String date = booking.getDate() != null
+                ? booking.getDate().getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+                + " " + booking.getDate().getDayOfMonth()
+                + ", " + booking.getDate().getYear()
+                : "-";
+
+        String timeRange = booking.getStartTime() + " to " + booking.getEndTime();
+        String action = isRejected ? "rejected" : "canceled";
+        String emoji = "❌";
+        String title = isRejected ? "Booking Rejected" : "Booking Canceled";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(emoji).append(" *").append(escapeTelegramMarkdown(title)).append("*\n\n");
+        sb.append("Your booking for *").append(escapeTelegramMarkdown(serviceName));
+        if (duration != null) sb.append(" (").append(duration).append(" min)");
+        sb.append("* at *").append(escapeTelegramMarkdown(businessName))
+          .append("* with *").append(escapeTelegramMarkdown(staffName))
+          .append("* on *").append(escapeTelegramMarkdown(date))
+          .append("* from *").append(escapeTelegramMarkdown(timeRange))
+          .append("* has been ").append(action).append(".\n");
+
+        String reason = booking.getCancellationReason();
+        if (reason != null && !reason.isBlank()) {
+            sb.append("\n*Reason:* ").append(escapeTelegramMarkdown(reason)).append("\n");
+        }
+
+                String businessPhone = booking.getService() != null && booking.getService().getBusiness() != null
+                                ? booking.getService().getBusiness().getPhone() : null;
+                String businessTelegramContact = buildBusinessTelegramContactUrl(businessPhone);
+
+        sb.append("\nIf you think this ").append(action)
+            .append(" was a mistake, you can contact the business directly on Telegram.");
+        if (businessTelegramContact != null) {
+            sb.append("\n").append(escapeTelegramMarkdown(businessTelegramContact));
+        }
+        sb.append("\n\n");
+        sb.append("*Booking ID:* ").append(booking.getId()).append("-Kayedni-Booking");
+
+        return sb.toString();
+    }
+
+    private String buildCancelRejectReplyMarkup(ServiceBooking booking) {
+        String businessName = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getName() : "Business";
+        String businessPhone = booking.getService() != null && booking.getService().getBusiness() != null
+                ? booking.getService().getBusiness().getPhone() : null;
+
+        String contactUrl = buildBusinessTelegramContactUrl(businessPhone);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"inline_keyboard\":[");
+        if (contactUrl != null) {
+            sb.append("[{\"text\":\"\\uD83D\\uDCAC Contact ")
+                .append(escapeJson(businessName))
+                .append("\",\"url\":\"")
+                .append(escapeJson(contactUrl))
+                .append("\"}]");
+        }
+        sb.append("]}");
+        return sb.toString();
+    }
+
+    /**
+     * Escape special characters for Telegram Markdown v1.
+     * Only *, _, `, [ need escaping.
+     */
+    private String escapeTelegramMarkdown(String text) {
+        if (text == null) return "-";
+        return text
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
+                .replace("]", "\\]");
+    }
+
+    private boolean sendTelegramMarkdownWithFallback(String botToken, String chatId, String markdownText, String replyMarkupJson) {
+        boolean sent = sendTelegramWithBot(botToken, chatId, markdownText, "Markdown", replyMarkupJson);
+        if (sent) {
+            return true;
+        }
+
+        String plain = stripTelegramMarkdown(markdownText);
+
+        // Keep buttons even when markdown parsing fails.
+        return sendTelegramWithBot(botToken, chatId, plain, null, replyMarkupJson);
+    }
+
+    private String stripTelegramMarkdown(String markdownText) {
+        if (markdownText == null) {
+            return "";
+        }
+        return markdownText
+                .replace("*", "")
+                .replace("_", "")
+                .replace("`", "")
+                .replace("\\", "");
+    }
+
+    private String buildBusinessTelegramContactUrl(String businessPhone) {
+        if (businessPhone == null || businessPhone.isBlank()) {
+            return null;
+        }
+
+        return "https://t.me/" + businessPhone;
+    }
+
 }
