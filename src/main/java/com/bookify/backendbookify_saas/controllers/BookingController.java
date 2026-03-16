@@ -3,10 +3,16 @@ package com.bookify.backendbookify_saas.controllers;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingCreateRequest;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingResponse;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
+import com.bookify.backendbookify_saas.services.BookingNotificationService;
 import com.bookify.backendbookify_saas.services.impl.BookingServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -14,9 +20,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
 
 /**
  * REST Controller for Booking operations.
@@ -30,6 +33,7 @@ import java.util.Map;
 public class BookingController {
 
     private final BookingServiceImpl bookingService;
+    private final BookingNotificationService bookingNotificationService;
 
     /**
      * Create a new booking.
@@ -192,6 +196,44 @@ public class BookingController {
             return ResponseEntity.ok(Map.of("message", "Booking cancelled successfully"));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Staff-triggered immediate reminder for an upcoming confirmed booking.
+     */
+    @PostMapping("/{bookingId}/staff-reminder-now")
+    @Operation(summary = "Send immediate reminder", description = "Staff sends an immediate Telegram reminder asking the client to come now")
+    public ResponseEntity<?> sendStaffReminderNow(
+            @PathVariable Long bookingId,
+            Authentication authentication
+    ) {
+        if (authentication == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Authentication required"));
+        }
+
+        try {
+            var bookingOpt = bookingService.getServiceBookingById(bookingId);
+            if (bookingOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Booking not found"));
+            }
+
+            var booking = bookingOpt.get();
+            if (booking.getStatus() != BookingStatusEnum.CONFIRMED) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Only confirmed bookings can receive this reminder"));
+            }
+
+            LocalDateTime bookingStart = LocalDateTime.of(booking.getDate(), booking.getStartTime());
+            if (!bookingStart.isAfter(LocalDateTime.now())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "This reminder is only available for upcoming bookings"));
+            }
+
+            bookingNotificationService.sendStaffComeNowReminder(booking);
+            return ResponseEntity.ok(Map.of("message", "Reminder sent successfully"));
+        } catch (Exception e) {
+            log.error("Failed to send immediate reminder for booking {}: {}", bookingId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to send reminder"));
         }
     }
 

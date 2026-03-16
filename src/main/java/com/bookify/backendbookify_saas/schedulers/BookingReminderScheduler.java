@@ -4,6 +4,13 @@ import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import com.bookify.backendbookify_saas.repositories.ServiceBookingRepository;
 import com.bookify.backendbookify_saas.services.BookingNotificationService;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,11 +18,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalTime;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
@@ -46,9 +48,11 @@ public class BookingReminderScheduler {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        // Align to minute precision so bookings at exact HH:mm are not skipped when cron runs a few seconds late.
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
         LocalDateTime windowStart = now.plusMinutes(minutesBefore);
-        LocalDateTime windowEnd = windowStart.plusMinutes(windowMinutes);
+        long effectiveWindowMinutes = Math.max(1, windowMinutes);
+        LocalDateTime windowEnd = windowStart.plusMinutes(effectiveWindowMinutes);
         log.debug("Booking reminder scheduler started (windowStart={}, windowEnd={}, minutesBefore={})",
                 windowStart, windowEnd, minutesBefore);
 

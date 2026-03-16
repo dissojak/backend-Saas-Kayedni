@@ -5,15 +5,15 @@ import com.bookify.backendbookify_saas.models.entities.StaffAvailability;
 import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
 import com.bookify.backendbookify_saas.repositories.StaffAvailabilityRepository;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Service to sync staff availabilities when business weekend_day changes.
@@ -95,9 +95,9 @@ public class WeekendDaySyncService {
         // Map Java DayOfWeek to MySQL DAYOFWEEK: MySQL 1=Sunday,2=Monday,... Java MONDAY=1 -> MySQL=2 => mysqlDow = (javaValue % 7) + 1
         int mysqlDow = (currentWeekendDay == null) ? 0 : (currentWeekendDay.getValue() % 7) + 1;
         // closed: set CLOSED for dates that are Sunday (1) OR the business weekend day (mysqlDow)
-        int closedUpdated = availabilityRepository.bulkUpdateStatusToClosedForBusinessInRange(businessId, today, endDate, mysqlDow, AvailabilityStatus.CLOSED.name());
+        int closedUpdated = availabilityRepository.bulkUpdateStatusToClosedForBusinessInRange(businessId, today, endDate, mysqlDow, AvailabilityStatus.CLOSED);
         // available: set AVAILABLE for dates that are not Sunday and not the business weekend day
-        int availableUpdated = availabilityRepository.bulkUpdateStatusToAvailableForBusinessInRange(businessId, today, endDate, mysqlDow, AvailabilityStatus.AVAILABLE.name());
+        int availableUpdated = availabilityRepository.bulkUpdateStatusToAvailableForBusinessInRange(businessId, today, endDate, mysqlDow, AvailabilityStatus.AVAILABLE);
 
         updatedCount = closedUpdated + availableUpdated;
         totalAvailabilitiesFound = allInRange.size();

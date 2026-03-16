@@ -46,6 +46,7 @@ public class ServiceBookingResponse {
     private LocalTime endTime;
     private BookingStatusEnum status;
     private String notes;
+    private String cancellationReason;
     private BigDecimal price;
 
     private LocalDateTime createdAt;

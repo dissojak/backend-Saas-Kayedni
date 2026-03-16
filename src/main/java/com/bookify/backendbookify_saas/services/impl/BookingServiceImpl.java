@@ -291,10 +291,17 @@ public class BookingServiceImpl implements BookingService {
 
         BookingStatusEnum previousStatus = booking.getStatus();
 
-        booking.setStatus(BookingStatusEnum.CANCELLED);
-        if (reason != null && !reason.isBlank()) {
-            booking.setNotes((booking.getNotes() != null ? booking.getNotes() + "\n" : "") + "Cancellation reason: " + reason);
+        // PENDING bookings → REJECTED; everything else (CONFIRMED) → CANCELLED
+        if (previousStatus == BookingStatusEnum.PENDING) {
+            booking.setStatus(BookingStatusEnum.REJECTED);
+        } else {
+            booking.setStatus(BookingStatusEnum.CANCELLED);
         }
+
+        if (reason != null && !reason.isBlank()) {
+            booking.setCancellationReason(reason.trim());
+        }
+
         ServiceBooking saved = serviceBookingRepository.save(booking);
         bookingNotificationService.notifyStatusChange(saved, previousStatus);
     }
@@ -370,6 +377,7 @@ public class BookingServiceImpl implements BookingService {
                 .endTime(booking.getEndTime())
                 .status(booking.getStatus())
                 .notes(booking.getNotes())
+                .cancellationReason(booking.getCancellationReason())
                 .price(booking.getPrice())
                 .createdAt(booking.getCreatedAt())
                 .updatedAt(booking.getUpdatedAt());
