@@ -189,7 +189,7 @@ public class ClientTelegramOnboardingPollingService {
         if (linkedCount > 0) {
             sendChatMessage(chatId, "Telegram notifications are now linked.");
         } else {
-            sendChatMessage(chatId, "No account matched this phone number in Bookify. Please verify your phone in the app.");
+            sendChatMessage(chatId, "No account matched this phone number in Kayedni. Please verify your phone in the app.");
         }
     }
 

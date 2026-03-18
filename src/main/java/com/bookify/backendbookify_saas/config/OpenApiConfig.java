@@ -19,16 +19,16 @@ public class OpenApiConfig {
     private static final String SECURITY_SCHEME_NAME = "bearerAuth";
 
     @Bean
-    public OpenAPI bookifyOpenAPI() {
+    public OpenAPI kayedniOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Bookify SaaS API")
-                        .description("API pour le système de réservation multi-tenant Bookify SaaS")
+                        .title("Kayedni SaaS API")
+                        .description("API pour le système de réservation multi-tenant Kayedni SaaS")
                         .version("1.0.0")
                         .contact(new Contact()
-                                .name("Bookify Team")
-                                .email("contact@bookify.com")
-                                .url("https://www.bookify.com"))
+                                .name("Kayedni Team")
+                                .email("contact@kayedni.com")
+                                .url("https://www.kayedni.com"))
                         .license(new License()
                                 .name("Apache 2.0")
                                 .url("http://www.apache.org/licenses/LICENSE-2.0.html")))

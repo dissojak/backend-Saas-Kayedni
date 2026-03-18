@@ -32,11 +32,11 @@ public class MailServiceImpl implements MailService {
     @Override
     public void sendActivationEmail(String recipientEmail, String recipientName, String activationToken) {
         String activationLink = baseUrl + "/v1/auth/activate?token=" + activationToken;
-        String subject = "Activate your Bookify account";
+        String subject = "Activate your Kayedni account";
 
         String html = buildActivationHtml(recipientName, activationLink);
         String plain = String.format(
-                "Hello %s,\n\nActivate your Bookify account by visiting the link below:\n\n%s\n\nIf you did not sign up, ignore this email.\n",
+                "Hello %s,\n\nActivate your Kayedni account by visiting the link below:\n\n%s\n\nIf you did not sign up, ignore this email.\n",
                 recipientName, activationLink
         );
 
@@ -45,11 +45,11 @@ public class MailServiceImpl implements MailService {
 
     @Override
     public void sendActivationConfirmationEmail(String recipientEmail, String recipientName) {
-        String subject = "Your Bookify account is activated";
+        String subject = "Your Kayedni account is activated";
         String html = "<div style=\"font-family:system-ui,Arial,sans-serif;max-width:520px;padding:20px\">" +
-                "<h2 style=\"color:#0d9488;margin:0 0 12px;font-size:20px;\">Welcome to Bookify</h2>" +
+                "<h2 style=\"color:#0d9488;margin:0 0 12px;font-size:20px;\">Welcome to Kayedni</h2>" +
                 "<p>Hi " + safe(recipientName) + ",</p>" +
-                "<p>Your account has been activated successfully. You can now log in and start using Bookify.</p>" +
+                "<p>Your account has been activated successfully. You can now log in and start using Kayedni.</p>" +
                 "<p style=\"color:#6b7280;font-size:13px;margin-top:18px;\">If you did not request this, please contact support.</p>" +
                 "</div>";
         String plain = String.format("Hello %s,\n\nYour account has been activated. You can now log in.\n", recipientName);
@@ -59,19 +59,19 @@ public class MailServiceImpl implements MailService {
 
     @Override
     public void sendAccountDeletionEmail(String recipientEmail, String recipientName) {
-        String subject = "Your Bookify account has been deleted";
+        String subject = "Your Kayedni account has been deleted";
         String accent = "#ef4444";
 
         String html = "<div style=\"font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color:#111827;\">" +
                 "<div style=\"max-width:520px;margin:0 auto;padding:28px;background:#ffffff;border-radius:10px;box-shadow:0 4px 18px rgba(15,23,42,0.06);\">" +
 
                 "<div style=\"text-align:left;margin-bottom:18px;\">" +
-                "<img src=\"" + logoUrl + "\" alt=\"Bookify\" style=\"height:102px;display:inline-block;vertical-align:middle;\" onerror=\"this.style.display='none'\" />" +
+                "<img src=\"" + logoUrl + "\" alt=\"Kayedni\" style=\"height:102px;display:inline-block;vertical-align:middle;\" onerror=\"this.style.display='none'\" />" +
                 "</div>" +
 
                 "<h2 style=\"color:" + accent + ";margin:0 0 8px;font-size:20px;\">Account Deletion Notice</h2>" +
                 "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;\">Hi " + safe(recipientName) + ",</p>" +
-                "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;\">Your Bookify account has been automatically deleted because the activation link expired without being used.</p>" +
+                "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;\">Your Kayedni account has been automatically deleted because the activation link expired without being used.</p>" +
                 "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;\">Activation tokens are valid for <strong>7 days</strong> from the registration date.</p>" +
 
                 "<div style=\"background:#fef2f2;border-left:4px solid " + accent + ";padding:12px 16px;margin:0 0 22px;border-radius:4px;\">" +
@@ -79,7 +79,7 @@ public class MailServiceImpl implements MailService {
                 "<p style=\"margin:8px 0 0;font-size:14px;color:#991b1b;\">All your account data has been permanently removed from our system.</p>" +
                 "</div>" +
 
-                "<p style=\"margin:0 0 8px;font-size:15px;color:#374151;\">If you still want to use Bookify, you can create a new account:</p>" +
+                "<p style=\"margin:0 0 8px;font-size:15px;color:#374151;\">If you still want to use Kayedni, you can create a new account:</p>" +
                 "<p style=\"margin:0 0 22px;\">" +
                 "<a href=\"" + baseUrl + "/v1/auth/signup\" target=\"_blank\" rel=\"noopener noreferrer\" " +
                 "style=\"background:#0d9488;color:#ffffff;padding:12px 20px;text-decoration:none;border-radius:10px;font-weight:700;display:inline-block;\">Sign up again</a>" +
@@ -90,15 +90,15 @@ public class MailServiceImpl implements MailService {
                 "</div>" +
 
                 "<div style=\"max-width:520px;margin:12px auto 0;text-align:center;font-size:12px;color:#9ca3af;\">" +
-                "© " + java.time.Year.now().getValue() + " Bookify. All rights reserved." +
+                "© " + java.time.Year.now().getValue() + " Kayedni. All rights reserved." +
                 "</div>" +
                 "</div>";
 
         String plain = String.format(
-                "Hello %s,\n\nYour Bookify account has been automatically deleted because the activation link expired without being used.\n\n" +
+                "Hello %s,\n\nYour Kayedni account has been automatically deleted because the activation link expired without being used.\n\n" +
                         "Activation tokens are valid for 7 days from the registration date.\n\n" +
-                        "If you still want to use Bookify, you can create a new account at: %s/v1/auth/signup\n\n" +
-                        "Best regards,\nThe Bookify Team",
+                        "If you still want to use Kayedni, you can create a new account at: %s/v1/auth/signup\n\n" +
+                        "Best regards,\nThe Kayedni Team",
                 recipientName,
                 baseUrl
         );
@@ -130,19 +130,19 @@ public class MailServiceImpl implements MailService {
     private String buildActivationHtml(String name, String activationLink) {
         String safeName = safe(name);
         String accent = "#0d9488";
-        String preheader = "Activate your Bookify account to get started.";
+        String preheader = "Activate your Kayedni account to get started.";
 
         return "<div style=\"font-family:system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; color:#111827;\">" +
                 "<div style=\"display:none;max-height:0px;overflow:hidden;color:transparent;opacity:0;\">" + preheader + "</div>" +
 
                 "<div style=\"max-width:520px;margin:0 auto;padding:28px;background:#ffffff;border-radius:10px;box-shadow:0 4px 18px rgba(15,23,42,0.06);\">" +
                 "<div style=\"text-align:left;margin-bottom:18px;\">" +
-                "<img src=\"" + logoUrl + "\" alt=\"Bookify\" style=\"height:102px;display:inline-block;vertical-align:middle;\" onerror=\"this.style.display='none'\" />" +
+                "<img src=\"" + logoUrl + "\" alt=\"Kayedni\" style=\"height:102px;display:inline-block;vertical-align:middle;\" onerror=\"this.style.display='none'\" />" +
                 "</div>" +
 
-                "<h2 style=\"color:" + accent + ";margin:0 0 8px;font-size:20px;\">Welcome to Bookify</h2>" +
+                "<h2 style=\"color:" + accent + ";margin:0 0 8px;font-size:20px;\">Welcome to Kayedni</h2>" +
                 "<p style=\"margin:0 0 16px;font-size:15px;color:#374151;\">Hi " + safeName + ",</p>" +
-                "<p style=\"margin:0 0 22px;font-size:15px;color:#374151;\">Click the button below to activate your account and start exploring Bookify.</p>" +
+                "<p style=\"margin:0 0 22px;font-size:15px;color:#374151;\">Click the button below to activate your account and start exploring Kayedni.</p>" +
 
                 "<p style=\"margin:0 0 22px;\">" +
                 "<a href=\"" + activationLink + "\" target=\"_blank\" rel=\"noopener noreferrer\" " +
@@ -155,11 +155,11 @@ public class MailServiceImpl implements MailService {
                 "</p>" +
 
                 "<hr style=\"border:none;border-top:1px solid #e6e9ee;margin:22px 0;\" />" +
-                "<p style=\"font-size:12px;color:#9ca3af;margin:0;\">If you did not sign up for a Bookify account, you can safely ignore this email.</p>" +
+                "<p style=\"font-size:12px;color:#9ca3af;margin:0;\">If you did not sign up for a Kayedni account, you can safely ignore this email.</p>" +
                 "</div>" +
 
                 "<div style=\"max-width:520px;margin:12px auto 0;text-align:center;font-size:12px;color:#9ca3af;\">" +
-                "© " + java.time.Year.now().getValue() + " Bookify. All rights reserved." +
+                "© " + java.time.Year.now().getValue() + " Kayedni. All rights reserved." +
                 "</div>" +
                 "</div>";
     }

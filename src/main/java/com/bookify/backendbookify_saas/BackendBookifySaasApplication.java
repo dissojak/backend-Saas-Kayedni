@@ -60,7 +60,7 @@ public class BackendBookifySaasApplication {
             String contextPath = environment.getProperty("server.servlet.context-path", "");
 
             System.out.println("\n----------------------------------------------------------");
-            System.out.println("🚀 Bookify SaaS Server is running!");
+            System.out.println("🚀 Kayedni SaaS Server is running!");
             System.out.println("    📡 Local:   http://localhost:" + port + contextPath);
             try {
                 String hostAddress = java.net.InetAddress.getLocalHost().getHostAddress();
