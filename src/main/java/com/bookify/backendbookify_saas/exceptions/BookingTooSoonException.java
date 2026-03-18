@@ -1,6 +1,8 @@
 package com.bookify.backendbookify_saas.exceptions;
 
 
+import lombok.Getter;
+
 @Getter
 public class BookingTooSoonException extends RuntimeException {
     private final long minLeadMinutes;
