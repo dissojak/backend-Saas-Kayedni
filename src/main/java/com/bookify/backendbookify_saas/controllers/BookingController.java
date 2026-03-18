@@ -1,5 +1,6 @@
 package com.bookify.backendbookify_saas.controllers;
 
+import com.bookify.backendbookify_saas.exceptions.BookingTooSoonException;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingCreateRequest;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingResponse;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
@@ -51,6 +52,13 @@ public class BookingController {
             
             ServiceBookingResponse response = bookingService.createServiceBookingFromRequest(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (BookingTooSoonException e) {
+            log.warn("Booking blocked by lead-time rule: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "errorCode", "BOOKING_TOO_SOON",
+                    "error", e.getMessage(),
+                    "minLeadMinutes", e.getMinLeadMinutes()
+            ));
         } catch (RuntimeException e) {
             log.error("Booking creation failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -286,6 +294,12 @@ public class BookingController {
             
             ServiceBookingResponse response = bookingService.rescheduleBooking(bookingId, date, startTime, endTime, initiatedByClient);
             return ResponseEntity.ok(response);
+        } catch (BookingTooSoonException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "errorCode", "BOOKING_TOO_SOON",
+                    "error", e.getMessage(),
+                    "minLeadMinutes", e.getMinLeadMinutes()
+            ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (RuntimeException e) {
