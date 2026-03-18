@@ -1,5 +1,6 @@
 package com.bookify.backendbookify_saas.services.impl;
 
+import com.bookify.backendbookify_saas.exceptions.BookingTooSoonException;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingCreateRequest;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingResponse;
 import com.bookify.backendbookify_saas.models.entities.*;
@@ -9,15 +10,13 @@ import com.bookify.backendbookify_saas.repositories.*;
 import com.bookify.backendbookify_saas.services.BookingNotificationService;
 import com.bookify.backendbookify_saas.services.BookingService;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.stereotype.Service;
+
 
 
 
@@ -29,6 +28,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 @Slf4j
 public class BookingServiceImpl implements BookingService {
+
+    private static final long MIN_BOOKING_LEAD_MINUTES = 3;
 
     private final ServiceBookingRepository serviceBookingRepository;
     private final ServiceRepository serviceRepository;
@@ -66,6 +67,8 @@ public class BookingServiceImpl implements BookingService {
         if (request.getStaffId() == null) {
             throw new RuntimeException("Staff ID is required for booking");
         }
+
+        validateBookingLeadTime(request.getDate(), request.getStartTime());
 
         // Fetch service
         com.bookify.backendbookify_saas.models.entities.Service service = serviceRepository.findById(request.getServiceId())
@@ -354,6 +357,8 @@ public class BookingServiceImpl implements BookingService {
             newEndTime = newStartTime.plusMinutes(durationMinutes);
         }
 
+        validateBookingLeadTime(newDate, newStartTime);
+
         // Check if the new time slot is available using existing repository method
         Long staffId = booking.getStaff().getId();
         List<ServiceBooking> conflictingBookings = serviceBookingRepository.findByStaffIdAndDateExcludingCancelled(staffId, newDate);
@@ -390,6 +395,16 @@ public class BookingServiceImpl implements BookingService {
             bookingNotificationService.notifyStatusChange(booking, previousStatus);
         } catch (Exception e) {
             log.warn("Booking {} status persisted but status notification failed: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    private void validateBookingLeadTime(LocalDate date, LocalTime startTime) {
+        LocalDateTime requestedStart = LocalDateTime.of(date, startTime);
+        LocalDateTime minAllowedStart = LocalDateTime.now().plusMinutes(MIN_BOOKING_LEAD_MINUTES);
+
+        // Exactly +3 minutes is blocked; booking must be strictly after now + 3 minutes.
+        if (!requestedStart.isAfter(minAllowedStart)) {
+            throw new BookingTooSoonException(MIN_BOOKING_LEAD_MINUTES);
         }
     }
 
