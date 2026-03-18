@@ -110,3 +110,13 @@ TRACKING_SERVICE_TIMEOUT_MS=1000
   - Confirm tracking backend is reachable and API key matches.
 - AI features not available:
   - Ensure `GEMINI_API_KEY` is set in environment before startup.
+
+## License and Copyright
+
+This repository is proprietary.
+
+Copyright (c) 2026 StoonProduction. All rights reserved.
+
+No right is granted to use, copy, edit, modify, distribute, or create derivative works without prior written permission from StoonProduction.
+
+See `LICENSE` in this repository and `../LICENSE` at workspace root for full terms.
