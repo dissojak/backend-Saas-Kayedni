@@ -1,22 +1,27 @@
 package com.bookify.backendbookify_saas.services.impl;
 
-import com.bookify.backendbookify_saas.models.entities.*;
 import com.bookify.backendbookify_saas.models.dtos.BusinessSearchDto;
+import com.bookify.backendbookify_saas.models.entities.*;
+import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BusinessStatus;
-import com.bookify.backendbookify_saas.repositories.BusinessRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessEvaluationRepository;
+import com.bookify.backendbookify_saas.repositories.BusinessRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.BusinessService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
+
+
 
 @Service
 @RequiredArgsConstructor
@@ -295,20 +300,75 @@ public class BusinessServiceImpl implements BusinessService {
 
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public java.util.List<BusinessSearchDto> advancedSearch(String query, String location, Long categoryId) {
+    public java.util.List<BusinessSearchDto> advancedSearch(String query, String location, Long categoryId, LocalDate date) {
         // Clean up inputs - treat empty strings as null
         String cleanQuery = (query != null && !query.isBlank()) ? query.trim() : null;
         String cleanLocation = (location != null && !location.isBlank()) ? location.trim() : null;
+        DayOfWeek dayOfWeek = date != null ? date.getDayOfWeek() : null;
 
         // If all parameters are null/empty, return empty list
-        if (cleanQuery == null && cleanLocation == null && categoryId == null) {
+        if (cleanQuery == null && cleanLocation == null && categoryId == null && dayOfWeek == null) {
             return java.util.List.of();
         }
 
-        java.util.List<Business> found = businessRepository.fullSearch(cleanQuery, cleanLocation, categoryId, BusinessStatus.ACTIVE);
+        java.util.List<AvailabilityStatus> workingStatuses = java.util.List.of(
+            AvailabilityStatus.AVAILABLE,
+            AvailabilityStatus.FULL
+        );
+
+        java.util.List<Business> found = businessRepository.fullSearch(
+            cleanQuery,
+            cleanLocation,
+            categoryId,
+            dayOfWeek,
+            date,
+            workingStatuses,
+            BusinessStatus.ACTIVE
+        );
         if (found == null || found.isEmpty()) return java.util.List.of();
 
         return found.stream().map(this::mapToSearchDto).collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<BusinessSearchDto> advancedSearchPaged(
+            String query,
+            String location,
+            Long categoryId,
+            LocalDate date,
+            int page,
+            int size
+    ) {
+        String cleanQuery = (query != null && !query.isBlank()) ? query.trim() : null;
+        String cleanLocation = (location != null && !location.isBlank()) ? location.trim() : null;
+        DayOfWeek dayOfWeek = date != null ? date.getDayOfWeek() : null;
+
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        var pageable = org.springframework.data.domain.PageRequest.of(safePage, safeSize);
+
+        if (cleanQuery == null && cleanLocation == null && categoryId == null && dayOfWeek == null) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+
+        java.util.List<AvailabilityStatus> workingStatuses = java.util.List.of(
+                AvailabilityStatus.AVAILABLE,
+                AvailabilityStatus.FULL
+        );
+
+        var paged = businessRepository.fullSearchPaged(
+                cleanQuery,
+                cleanLocation,
+                categoryId,
+                dayOfWeek,
+                date,
+                workingStatuses,
+                BusinessStatus.ACTIVE,
+                pageable
+        );
+
+        return paged.map(this::mapToSearchDto);
     }
 
     /**

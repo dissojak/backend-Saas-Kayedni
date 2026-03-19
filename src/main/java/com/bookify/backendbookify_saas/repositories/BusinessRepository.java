@@ -2,12 +2,18 @@ package com.bookify.backendbookify_saas.repositories;
 
 import com.bookify.backendbookify_saas.models.entities.Business;
 import com.bookify.backendbookify_saas.models.entities.User;
+import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BusinessStatus;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Repository pour l'entité Business
@@ -50,6 +56,11 @@ public interface BusinessRepository extends JpaRepository<Business, Long> {
     List<Business> findByStatus(BusinessStatus status);
 
     /**
+     * Find paged businesses with the given status
+     */
+    Page<Business> findByStatus(BusinessStatus status, Pageable pageable);
+
+    /**
      * New: case-insensitive partial search by name, filtering by status
      */
     List<Business> findByNameContainingIgnoreCaseAndStatus(String name, BusinessStatus status);
@@ -79,6 +90,9 @@ public interface BusinessRepository extends JpaRepository<Business, Long> {
     /**
      * Advanced search with category filter
      */
-    @org.springframework.data.jpa.repository.Query("SELECT b FROM Business b WHERE b.status = :status AND (:query IS NULL OR LOWER(b.name) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.description) LIKE LOWER(CONCAT('%', :query, '%'))) AND (:location IS NULL OR LOWER(b.location) LIKE LOWER(CONCAT('%', :location, '%'))) AND (:categoryId IS NULL OR b.category.id = :categoryId)")
-    List<Business> fullSearch(@org.springframework.data.repository.query.Param("query") String query, @org.springframework.data.repository.query.Param("location") String location, @org.springframework.data.repository.query.Param("categoryId") Long categoryId, @org.springframework.data.repository.query.Param("status") BusinessStatus status);
+    @org.springframework.data.jpa.repository.Query("SELECT b FROM Business b WHERE b.status = :status AND (:query IS NULL OR LOWER(b.name) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.description) LIKE LOWER(CONCAT('%', :query, '%'))) AND (:location IS NULL OR LOWER(b.location) LIKE LOWER(CONCAT('%', :location, '%'))) AND (:categoryId IS NULL OR b.category.id = :categoryId) AND (:dayOfWeek IS NULL OR b.weekendDay IS NULL OR b.weekendDay <> :dayOfWeek) AND (:selectedDate IS NULL OR EXISTS (SELECT sa.id FROM StaffAvailability sa WHERE sa.staff.employerBusiness.id = b.id AND sa.date = :selectedDate AND sa.status IN :workingStatuses) OR NOT EXISTS (SELECT sa2.id FROM StaffAvailability sa2 WHERE sa2.staff.employerBusiness.id = b.id AND sa2.date = :selectedDate))")
+    List<Business> fullSearch(@org.springframework.data.repository.query.Param("query") String query, @org.springframework.data.repository.query.Param("location") String location, @org.springframework.data.repository.query.Param("categoryId") Long categoryId, @org.springframework.data.repository.query.Param("dayOfWeek") DayOfWeek dayOfWeek, @org.springframework.data.repository.query.Param("selectedDate") LocalDate selectedDate, @org.springframework.data.repository.query.Param("workingStatuses") Collection<AvailabilityStatus> workingStatuses, @org.springframework.data.repository.query.Param("status") BusinessStatus status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT b FROM Business b WHERE b.status = :status AND (:query IS NULL OR LOWER(b.name) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(b.description) LIKE LOWER(CONCAT('%', :query, '%'))) AND (:location IS NULL OR LOWER(b.location) LIKE LOWER(CONCAT('%', :location, '%'))) AND (:categoryId IS NULL OR b.category.id = :categoryId) AND (:dayOfWeek IS NULL OR b.weekendDay IS NULL OR b.weekendDay <> :dayOfWeek) AND (:selectedDate IS NULL OR EXISTS (SELECT sa.id FROM StaffAvailability sa WHERE sa.staff.employerBusiness.id = b.id AND sa.date = :selectedDate AND sa.status IN :workingStatuses) OR NOT EXISTS (SELECT sa2.id FROM StaffAvailability sa2 WHERE sa2.staff.employerBusiness.id = b.id AND sa2.date = :selectedDate))")
+    Page<Business> fullSearchPaged(@org.springframework.data.repository.query.Param("query") String query, @org.springframework.data.repository.query.Param("location") String location, @org.springframework.data.repository.query.Param("categoryId") Long categoryId, @org.springframework.data.repository.query.Param("dayOfWeek") DayOfWeek dayOfWeek, @org.springframework.data.repository.query.Param("selectedDate") LocalDate selectedDate, @org.springframework.data.repository.query.Param("workingStatuses") Collection<AvailabilityStatus> workingStatuses, @org.springframework.data.repository.query.Param("status") BusinessStatus status, Pageable pageable);
 }

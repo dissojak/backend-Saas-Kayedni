@@ -6,12 +6,13 @@ import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.repositories.CategoryRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.CategoryService;
+import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +32,19 @@ public class CategoryServiceImpl implements CategoryService {
             limit = 12;
         }
         return categoryRepository.findAll(PageRequest.of(0, limit)).getContent();
+    }
+
+    @Override
+    public List<Category> search(String query, int limit) {
+        int safeLimit = (limit > 0 && limit <= 50) ? limit : 12;
+        String cleanQuery = query != null ? query.trim() : "";
+        if (cleanQuery.isEmpty()) {
+            return categoryRepository.findAll(PageRequest.of(0, safeLimit)).getContent();
+        }
+        return categoryRepository.findByNameContainingIgnoreCaseOrderByNameAsc(
+                cleanQuery,
+                PageRequest.of(0, safeLimit)
+        );
     }
 
     @Override
