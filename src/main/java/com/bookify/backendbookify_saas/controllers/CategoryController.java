@@ -6,16 +6,16 @@ import com.bookify.backendbookify_saas.services.CategoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/v1/categories")
@@ -55,6 +55,15 @@ public class CategoryController {
     @Operation(summary = "Get preview of categories (first 12)")
     public ResponseEntity<List<Category>> getPreviewCategories() {
         List<Category> categories = categoryService.findPreview(12);
+        return ResponseEntity.ok(categories);
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search categories by name")
+    public ResponseEntity<List<Category>> searchCategories(
+            @RequestParam(name = "q", required = false) String query,
+            @RequestParam(name = "limit", defaultValue = "12") int limit) {
+        List<Category> categories = categoryService.search(query, limit);
         return ResponseEntity.ok(categories);
     }
 

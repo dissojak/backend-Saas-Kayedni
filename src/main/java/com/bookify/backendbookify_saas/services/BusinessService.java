@@ -2,9 +2,9 @@ package com.bookify.backendbookify_saas.services;
 
 import com.bookify.backendbookify_saas.models.entities.Business;
 import com.bookify.backendbookify_saas.models.entities.User;
-
 import java.util.List;
 import java.util.Optional;
+
 
 /**
  * Interface de service pour la gestion des entreprises
@@ -42,5 +42,14 @@ public interface BusinessService {
      * Advanced search: query searches name/description, location filters by location, categoryId filters by category
      * All parameters are optional - null values are ignored
      */
-    java.util.List<com.bookify.backendbookify_saas.models.dtos.BusinessSearchDto> advancedSearch(String query, String location, Long categoryId);
+    java.util.List<com.bookify.backendbookify_saas.models.dtos.BusinessSearchDto> advancedSearch(String query, String location, Long categoryId, java.time.LocalDate date);
+
+    org.springframework.data.domain.Page<com.bookify.backendbookify_saas.models.dtos.BusinessSearchDto> advancedSearchPaged(
+            String query,
+            String location,
+            Long categoryId,
+            java.time.LocalDate date,
+            int page,
+            int size
+    );
 }
