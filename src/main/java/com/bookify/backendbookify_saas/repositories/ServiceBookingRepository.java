@@ -43,6 +43,27 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
                                                                 @Param("startDate") LocalDate startDate,
                                                                 @Param("endDate") LocalDate endDate);
 
+    @Query("SELECT DISTINCT sb FROM ServiceBooking sb " +
+           "LEFT JOIN FETCH sb.service s " +
+           "LEFT JOIN FETCH s.business b " +
+           "LEFT JOIN FETCH sb.client " +
+           "LEFT JOIN FETCH sb.staff " +
+           "LEFT JOIN FETCH sb.businessClient " +
+           "WHERE b.id = :businessId " +
+           "AND sb.date BETWEEN :startDate AND :endDate")
+    List<ServiceBooking> findByBusinessIdAndDateBetween(@Param("businessId") Long businessId,
+                                                        @Param("startDate") LocalDate startDate,
+                                                        @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT DISTINCT sb FROM ServiceBooking sb " +
+           "LEFT JOIN FETCH sb.service s " +
+           "LEFT JOIN FETCH s.business " +
+           "LEFT JOIN FETCH sb.client " +
+           "LEFT JOIN FETCH sb.staff " +
+           "LEFT JOIN FETCH sb.businessClient bc " +
+           "WHERE bc.id = :businessClientId")
+    List<ServiceBooking> findByBusinessClientIdWithServiceAndBusiness(@Param("businessClientId") Long businessClientId);
+
     List<ServiceBooking> findByStatus(BookingStatusEnum status);
 
     @Query("SELECT sb FROM ServiceBooking sb WHERE sb.service.business.id = :businessId AND sb.startTime BETWEEN :start AND :end AND sb.status <> com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CANCELLED")

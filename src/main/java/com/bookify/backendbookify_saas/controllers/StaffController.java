@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -103,6 +104,7 @@ public class StaffController {
     }
 
     @PatchMapping(path = "/{staffId}/workTime", consumes = "application/json", produces = "application/json")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Update staff default hours , work time ", description = "Staff can update their own default start and end times")
     public ResponseEntity<StaffHoursResponse> updateMyHours(
             Authentication authentication,
@@ -203,6 +205,7 @@ public class StaffController {
 
     // New endpoint: patch a single availability (staff updates their own availability)
     @PatchMapping(path = "/{staffId}/availabilities/{availabilityId}", consumes = "application/json", produces = "application/json")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Update a single staff availability", description = "Staff can edit their generated availability: change start/end/time/status")
     public ResponseEntity<?> patchAvailability(
             Authentication authentication,

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -41,12 +42,34 @@ public class BookingController {
      * Backend performs full validation: availability, conflicts, staff assignment.
      */
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Create a new booking", description = "Creates a service booking with server-side validation for availability and conflicts")
     public ResponseEntity<?> createBooking(
             Authentication authentication,
             @Valid @RequestBody ServiceBookingCreateRequest request
     ) {
         try {
+            // AUTH VALIDATION: If clientId is provided, ensure the authenticated user matches
+            if (request.getClientId() != null) {
+                if (authentication == null) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(Map.of("error", "Authentication required when clientId is provided"));
+                }
+
+                Long authenticatedUserId;
+                try {
+                    authenticatedUserId = Long.parseLong(authentication.getName());
+                } catch (NumberFormatException e) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(Map.of("error", "Invalid authenticated user id"));
+                }
+
+                if (!request.getClientId().equals(authenticatedUserId)) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(Map.of("error", "Cannot create booking for another user"));
+                }
+            }
+
             log.info("Creating booking: serviceId={}, staffId={}, date={}, startTime={}",
                     request.getServiceId(), request.getStaffId(), request.getDate(), request.getStartTime());
             
@@ -168,6 +191,7 @@ public class BookingController {
      * Update booking status.
      */
     @PutMapping("/{bookingId}/status")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Update booking status", description = "Update the status of a booking (PENDING, CONFIRMED, CANCELLED, COMPLETED, NO_SHOW)")
     public ResponseEntity<?> updateBookingStatus(
             @PathVariable Long bookingId,
@@ -193,6 +217,7 @@ public class BookingController {
      * Cancel a booking.
      */
     @PostMapping("/{bookingId}/cancel")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Cancel a booking", description = "Cancel a booking with an optional reason")
     public ResponseEntity<?> cancelBooking(
             @PathVariable Long bookingId,
@@ -224,6 +249,7 @@ public class BookingController {
      * Staff-triggered immediate reminder for an upcoming confirmed booking.
      */
     @PostMapping("/{bookingId}/staff-reminder-now")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Send immediate reminder", description = "Staff sends an immediate Telegram reminder asking the client to come now")
     public ResponseEntity<?> sendStaffReminderNow(
             @PathVariable Long bookingId,
@@ -262,6 +288,7 @@ public class BookingController {
      * Reschedule a booking to a new date/time.
      */
     @PutMapping("/{bookingId}/reschedule")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Reschedule a booking", description = "Reschedule a booking to a new date and time")
     public ResponseEntity<?> rescheduleBooking(
             @PathVariable Long bookingId,

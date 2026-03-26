@@ -244,11 +244,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional(readOnly = true)
     public List<ServiceBooking> getBookingsForBusinessBetweenDates(Long businessId, LocalDate startDate, LocalDate endDate) {
-        // Query all bookings and filter by business and date range
-        return serviceBookingRepository.findAll().stream()
-                .filter(booking -> booking.getService().getBusiness().getId().equals(businessId))
-                .filter(booking -> !booking.getDate().isBefore(startDate) && !booking.getDate().isAfter(endDate))
-                .collect(Collectors.toList());
+        return serviceBookingRepository.findByBusinessIdAndDateBetween(businessId, startDate, endDate);
     }
 
     /**
@@ -259,11 +255,9 @@ public class BookingServiceImpl implements BookingService {
         BusinessClient businessClient = businessClientRepository.findById(businessClientId)
                 .orElseThrow(() -> new RuntimeException("Business client not found"));
 
-        // Query all bookings and filter by business client
-        List<ServiceBooking> bookings = serviceBookingRepository.findAll().stream()
-                .filter(booking -> booking.getBusinessClient() != null &&
-                        booking.getBusinessClient().getId().equals(businessClientId))
-                .collect(Collectors.toList());
+        List<ServiceBooking> bookings = serviceBookingRepository.findByBusinessClientIdWithServiceAndBusiness(
+            businessClient.getId()
+        );
 
         return bookings.stream()
                 .map(this::mapToResponse)

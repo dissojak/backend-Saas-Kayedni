@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -25,6 +26,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+        @Value("${spring.profiles.active:dev}")
+        private String activeProfile;
 
     /**
      * Gère les exceptions UserAlreadyExistsException
@@ -174,16 +178,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleGlobalException(
             Exception ex,
             WebRequest request) {
-        // Log full stacktrace
         log.error("Unhandled exception occurred: {}", ex.getMessage(), ex);
 
-        // Build full stack trace string for debugging
+        boolean isProd = activeProfile != null && activeProfile.toLowerCase().contains("prod");
+        if (isProd) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Une erreur interne est survenue"));
+        }
+
         java.io.StringWriter sw = new java.io.StringWriter();
         java.io.PrintWriter pw = new java.io.PrintWriter(sw);
         ex.printStackTrace(pw);
         String full = sw.toString();
 
-        // Return full stack trace in detail (temporary for debugging). Remove or truncate in production.
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(

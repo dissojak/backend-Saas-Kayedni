@@ -22,9 +22,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -357,7 +357,7 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("No user found with this email"));
 
         // Generate 6-digit random code
-        String resetCode = String.format("%06d", new Random().nextInt(1000000));
+        String resetCode = String.format("%06d", new SecureRandom().nextInt(1000000));
 
         // Set reset token and expiration (15 minutes from now)
         user.setPasswordResetToken(resetCode);

@@ -3,10 +3,10 @@ package com.bookify.backendbookify_saas.services;
 import com.bookify.backendbookify_saas.email_SMTP.MailService;
 import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
+import com.bookify.backendbookify_saas.utils.HttpClientUtil;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -250,7 +250,7 @@ public class BookingNotificationService {
                     .timeout(Duration.ofSeconds(5))
                     .build();
 
-            HttpResponse<String> response = HttpClient.newHttpClient()
+            HttpResponse<String> response = HttpClientUtil.getClient()
                     .send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() != 200) {

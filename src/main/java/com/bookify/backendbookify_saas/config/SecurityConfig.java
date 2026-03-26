@@ -72,7 +72,7 @@ public class SecurityConfig {
                         ).permitAll()
                         // Explicit GET permit for staff services listing (guarantee it is public)
                         .requestMatchers(HttpMethod.GET, "/api/v1/staff/*/services", "/v1/staff/*/services").permitAll()
-                        // TEMP: Broad permit for staff GET endpoints (helps diagnose 403). Narrow this after verification.
+                        // PUBLIC: Allow unauthenticated users to browse staff profiles and details (guest browsing feature)
                         .requestMatchers(HttpMethod.GET, "/api/v1/staff/**", "/v1/staff/**").permitAll()
                         // Explicit GET permit for staff calendar (public)
                         .requestMatchers(HttpMethod.GET, "/api/v1/staff/*/calendar", "/v1/staff/*/calendar").permitAll()
@@ -94,7 +94,7 @@ public class SecurityConfig {
                                 // Note: removed patterns like '/**/*.css' because PathPattern (used by Spring 6) rejects '**' followed by more data
                                 "/favicon.ico"
                         ).permitAll()
-                        // TEMPORARILY ALLOW ALL CATEGORY & BUSINESSES ENDPOINTS FOR DEBUGGING
+                        // PUBLIC: Allow unauthenticated users to browse categories and businesses (guest browsing feature)
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/v1/categories/**",

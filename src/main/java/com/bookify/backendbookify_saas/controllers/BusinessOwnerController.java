@@ -10,6 +10,7 @@ import com.bookify.backendbookify_saas.models.entities.BusinessImage;
 import com.bookify.backendbookify_saas.models.entities.Category;
 import com.bookify.backendbookify_saas.repositories.BusinessEvaluationRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessImageRepository;
+import com.bookify.backendbookify_saas.services.AiRateLimiter;
 import com.bookify.backendbookify_saas.services.BusinessService;
 import com.bookify.backendbookify_saas.services.impl.BusinessEvaluationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +39,7 @@ public class BusinessOwnerController {
     private final BusinessImageRepository imageRepository;
     private final com.bookify.backendbookify_saas.services.WeekendDaySyncService weekendDaySyncService;
     private final BusinessEvaluationService evaluationService;
+    private final AiRateLimiter aiRateLimiter;
 
     @PostMapping
     @PreAuthorize("hasRole('BUSINESS_OWNER')")
@@ -282,7 +284,7 @@ public class BusinessOwnerController {
     @PostMapping("/{businessId}/reevaluate")
     @PreAuthorize("hasRole('BUSINESS_OWNER')")
     @Operation(summary = "Re-evaluate business with AI", description = "Force a new AI evaluation of the business and return updated business data")
-    public ResponseEntity<BusinessResponse> reevaluateBusiness(
+    public ResponseEntity<?> reevaluateBusiness(
             Authentication authentication,
             @PathVariable Long businessId
     ) {
@@ -300,6 +302,13 @@ public class BusinessOwnerController {
         if (business.getOwner() == null || business.getOwner().getId() == null ||
                 !business.getOwner().getId().equals(currentUserId)) {
             throw new IllegalArgumentException("You can only re-evaluate your own business");
+        }
+
+        if (!aiRateLimiter.tryConsume(businessId)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of(
+                    "error", "Daily AI re-evaluation limit reached",
+                    "message", "Please try again tomorrow"
+            ));
         }
 
         // Trigger fresh evaluation

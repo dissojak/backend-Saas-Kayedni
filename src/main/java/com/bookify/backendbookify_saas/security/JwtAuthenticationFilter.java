@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
 
     // List of public endpoints that don't require authentication
     private static final List<String> PUBLIC_URLS = Arrays.asList(
@@ -73,11 +77,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String requestPath = request.getRequestURI();
         final String requestMethod = request.getMethod();
 
-        System.out.println("╔════════════════════════════════════════════════════════════╗");
-        System.out.println("║ JWT FILTER - REQUEST RECEIVED");
-        System.out.println("║ Method: " + requestMethod);
-        System.out.println("║ Path: " + requestPath);
-        System.out.println("╚════════════════════════════════════════════════════════════╝");
+        printDev("╔════════════════════════════════════════════════════════════╗");
+        printDev("║ JWT FILTER - REQUEST RECEIVED");
+        printDev("║ Method: " + requestMethod);
+        printDev("║ Path: " + requestPath);
+        printDev("╚════════════════════════════════════════════════════════════╝");
 
         // Skip JWT authentication for public endpoints
         String matched = getMatchingPublicPrefix(requestPath, requestMethod);
@@ -90,7 +94,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String toParam = request.getParameter("to");
                 boolean hasRangeParams = fromParam != null && !fromParam.isBlank() && toParam != null && !toParam.isBlank();
                 if (isGet && hasRangeParams) {
-                    System.out.println("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET with from/to]");
+                    printDev("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET with from/to]");
                     filterChain.doFilter(request, response);
                     return;
                 }
@@ -101,7 +105,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if ("REGEX:/v1/staff/{id}/calendar".equals(matched)) {
                 boolean isGet = "GET".equalsIgnoreCase(requestMethod);
                 if (isGet) {
-                    System.out.println("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET]");
+                    printDev("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET]");
                     filterChain.doFilter(request, response);
                     return;
                 }
@@ -112,39 +116,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if ("REGEX:/v1/businesses/search".equals(matched)) {
                 boolean isGet = "GET".equalsIgnoreCase(requestMethod);
                 if (isGet) {
-                    System.out.println("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET]");
+                    printDev("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "') [GET]");
                     filterChain.doFilter(request, response);
                     return;
                 }
             }
 
             // Fallback: existing literal public prefixes or other regex that should be fully public
-            System.out.println("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "')");
+            printDev("✓ Public URL - Skipping JWT authentication (matched: '" + matched + "')");
             filterChain.doFilter(request, response);
             return;
         }
 
         final String authHeader = request.getHeader("Authorization");
-        System.out.println("Authorization header: " + (authHeader != null ? "Present (Bearer...)" : "Missing"));
+        printDev("Authorization header: " + (authHeader != null ? "Present (Bearer...)" : "Missing"));
 
         // Check if Authorization header exists and starts with "Bearer "
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            System.out.println("✗ No Bearer token - Passing to Spring Security");
+            printDev("✗ No Bearer token - Passing to Spring Security");
             filterChain.doFilter(request, response);
             return;
         }
 
         // Extract JWT token from header
         final String jwt = authHeader.substring(7);
-        System.out.println("✓ JWT Token extracted: " + jwt.substring(0, Math.min(20, jwt.length())) + "...");
+        printDev("✓ JWT Token extracted: " + jwt.substring(0, Math.min(20, jwt.length())) + "...");
 
         // Extract subject (must be userId now)
         final String tokenSubject;
         try {
             tokenSubject = jwtService.extractUsername(jwt);
-            System.out.println("✓ Token subject (userId) extracted: " + tokenSubject);
+            printDev("✓ Token subject (userId) extracted: " + tokenSubject);
         } catch (Exception ex) {
-            System.out.println("✗ FAILED to extract subject from token: " + ex.getMessage());
+            printDev("✗ FAILED to extract subject from token: " + ex.getMessage());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
             response.getWriter().write("{\"message\":\"Invalid or malformed token\"}");
@@ -155,9 +159,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         Long userId;
         try {
             userId = Long.parseLong(tokenSubject);
-            System.out.println("✓ Parsed userId: " + userId);
+            printDev("✓ Parsed userId: " + userId);
         } catch (NumberFormatException ex) {
-            System.out.println("✗ FAILED to parse userId (not a number): " + tokenSubject);
+            printDev("✗ FAILED to parse userId (not a number): " + tokenSubject);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
             response.getWriter().write("{\"message\":\"Token subject must be user id\"}");
@@ -166,34 +170,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // Check if user is not already authenticated
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            System.out.println("→ Loading user details for ID: " + userId);
+            printDev("→ Loading user details for ID: " + userId);
 
             UserDetails userDetails;
             try {
                 userDetails = this.userDetailsService.loadUserByUsername(String.valueOf(userId));
-                System.out.println("✓ User loaded successfully");
-                System.out.println("  Username: " + userDetails.getUsername());
-                System.out.println("  Authorities: " + userDetails.getAuthorities());
+                printDev("✓ User loaded successfully");
+                printDev("  Username: " + userDetails.getUsername());
+                printDev("  Authorities: " + userDetails.getAuthorities());
             } catch (Exception ex) {
-                System.out.println("✗ FAILED to load user: " + ex.getMessage());
+                printDev("✗ FAILED to load user: " + ex.getMessage());
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"message\":\"User not found\"}");
                 return;
             }
 
-            System.out.println("=== JWT AUTHENTICATION DEBUG ===");
-            System.out.println("User ID from token: " + userId);
-            System.out.println("UserDetails username: " + userDetails.getUsername());
-            System.out.println("UserDetails authorities: " + userDetails.getAuthorities());
-            System.out.println("================================");
+            printDev("=== JWT AUTHENTICATION DEBUG ===");
+            printDev("User ID from token: " + userId);
+            printDev("UserDetails username: " + userDetails.getUsername());
+            printDev("UserDetails authorities: " + userDetails.getAuthorities());
+            printDev("================================");
 
             // Validate token by subject (userId)
             boolean valid = jwtService.isTokenValidForSubject(jwt, String.valueOf(userId));
-            System.out.println("Token validation result: " + (valid ? "VALID ✓" : "INVALID ✗"));
+            printDev("Token validation result: " + (valid ? "VALID ✓" : "INVALID ✗"));
 
             if (!valid) {
-                System.out.println("✗ Token validation FAILED - Returning 401");
+                printDev("✗ Token validation FAILED - Returning 401");
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"message\":\"Invalid or expired token\"}");
@@ -208,12 +212,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
-            System.out.println("✓ Authentication set in SecurityContext");
+            printDev("✓ Authentication set in SecurityContext");
         }
 
-        System.out.println("→ Passing request to next filter in chain...");
+        printDev("→ Passing request to next filter in chain...");
         filterChain.doFilter(request, response);
-        System.out.println("✓ Request completed successfully");
+        printDev("✓ Request completed successfully");
+    }
+
+    private boolean isProductionProfile() {
+        return activeProfile != null && activeProfile.toLowerCase().contains("prod");
+    }
+
+    private void printDev(String message) {
+        if (!isProductionProfile()) {
+            System.out.println(message);
+        }
     }
 
     /**

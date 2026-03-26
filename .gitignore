@@ -34,3 +34,8 @@ build/
 
 # Local environment files
 .env
+
+# Application logs
+*.log
+hs_err_pid*.log
+backend.log
