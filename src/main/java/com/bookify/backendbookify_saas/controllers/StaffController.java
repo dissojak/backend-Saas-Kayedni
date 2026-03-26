@@ -6,12 +6,19 @@ import com.bookify.backendbookify_saas.models.dtos.StaffHoursResponse;
 import com.bookify.backendbookify_saas.models.dtos.StaffHoursUpdateRequest;
 import com.bookify.backendbookify_saas.models.entities.Business;
 import com.bookify.backendbookify_saas.models.entities.Staff;
-import com.bookify.backendbookify_saas.repositories.StaffRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
-import com.bookify.backendbookify_saas.services.StaffAvailabilityService;
+import com.bookify.backendbookify_saas.repositories.StaffRepository;
 import com.bookify.backendbookify_saas.services.StaffAvailabilityGeneratorService;
+import com.bookify.backendbookify_saas.services.StaffAvailabilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+import java.util.Optional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +26,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalTime;
-import java.time.format.DateTimeParseException;
-import java.util.List;
-import java.util.Optional;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 @RestController
 @RequestMapping("/v1/staff")

@@ -1,19 +1,20 @@
 package com.bookify.backendbookify_saas.repositories;
 
 import com.bookify.backendbookify_saas.models.entities.BusinessClient;
-import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.entities.Service;
 import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
+import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.List;
 
 /**
  * Repository for ServiceBooking with diagram-aligned queries.
