@@ -9,6 +9,9 @@ import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.UserProfileService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import java.io.IOException;
+import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -142,6 +143,9 @@ public class UserProfileServiceImpl implements UserProfileService {
                 .hasBusiness(user.getBusiness() != null)
                 .businessId(user.getBusiness() != null ? user.getBusiness().getId() : null)
                 .businessName(user.getBusiness() != null ? user.getBusiness().getName() : null)
+                .businessCategoryName(user.getBusiness() != null && user.getBusiness().getCategory() != null
+                    ? user.getBusiness().getCategory().getName()
+                    : null)
                 .build();
     }
 

@@ -14,16 +14,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+
 @Service
 @RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService {
+
+    private static final Long EXCLUDED_SIGNUP_CATEGORY_ID = 25L; // ID of the "Other industry" category to exclude from general listings
 
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
 
     @Override
     public List<Category> findAll() {
-        return categoryRepository.findAll();
+        return categoryRepository.findByIdNot(EXCLUDED_SIGNUP_CATEGORY_ID);
     }
 
     @Override
@@ -31,7 +34,7 @@ public class CategoryServiceImpl implements CategoryService {
         if (limit <= 0) {
             limit = 12;
         }
-        return categoryRepository.findAll(PageRequest.of(0, limit)).getContent();
+        return categoryRepository.findByIdNot(EXCLUDED_SIGNUP_CATEGORY_ID, PageRequest.of(0, limit)).getContent();
     }
 
     @Override
@@ -39,9 +42,10 @@ public class CategoryServiceImpl implements CategoryService {
         int safeLimit = (limit > 0 && limit <= 50) ? limit : 12;
         String cleanQuery = query != null ? query.trim() : "";
         if (cleanQuery.isEmpty()) {
-            return categoryRepository.findAll(PageRequest.of(0, safeLimit)).getContent();
+            return categoryRepository.findByIdNot(EXCLUDED_SIGNUP_CATEGORY_ID, PageRequest.of(0, safeLimit)).getContent();
         }
-        return categoryRepository.findByNameContainingIgnoreCaseOrderByNameAsc(
+        return categoryRepository.findByIdNotAndNameContainingIgnoreCaseOrderByNameAsc(
+                EXCLUDED_SIGNUP_CATEGORY_ID,
                 cleanQuery,
                 PageRequest.of(0, safeLimit)
         );

@@ -9,10 +9,12 @@ import com.bookify.backendbookify_saas.models.enums.RoleEnum;
 import com.bookify.backendbookify_saas.models.enums.UserStatusEnum;
 import com.bookify.backendbookify_saas.repositories.ActivationTokenRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
+import com.bookify.backendbookify_saas.repositories.CategoryRepository;
 import com.bookify.backendbookify_saas.repositories.StaffRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.security.JwtService;
 import com.bookify.backendbookify_saas.services.AuthService;
+import com.bookify.backendbookify_saas.services.IndustryFeedbackService;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -35,6 +37,7 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthServiceImpl.class);
+    private static final Long OTHER_INDUSTRY_CATEGORY_ID = 25L;
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository activationTokenRepository;
@@ -43,7 +46,9 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final MailService mailService;
     private final BusinessRepository businessRepository;
+    private final CategoryRepository categoryRepository;
     private final StaffRepository staffRepository;
+    private final IndustryFeedbackService industryFeedbackService;
 
     /**
      * Inscription d'un nouveau client/utilisateur avec rôle optionnel
@@ -82,6 +87,54 @@ public class AuthServiceImpl implements AuthService {
         // 7. Sauvegarder
         User savedUser = userRepository.save(user);
 
+        // 7.1 For business owners, create business in the same transaction.
+        // If anything fails below, the user record is rolled back too.
+        if (role == RoleEnum.BUSINESS_OWNER) {
+            SignupBusinessRequest businessRequest = request.getBusiness();
+            if (businessRequest == null) {
+                throw new IllegalArgumentException("Business information is required for business owner signup");
+            }
+
+            if (businessRepository.existsByOwner(savedUser)) {
+                throw new IllegalArgumentException("You already have a business associated with your account");
+            }
+
+            businessRepository.findByName(businessRequest.getName()).ifPresent(b -> {
+                throw new IllegalArgumentException("A business with that name already exists");
+            });
+
+                SignupOtherIndustryFeedbackRequest feedbackRequest = businessRequest.getOtherIndustryFeedback();
+                Long resolvedCategoryId = feedbackRequest != null
+                    ? OTHER_INDUSTRY_CATEGORY_ID
+                    : businessRequest.getCategoryId();
+
+                Category category = categoryRepository.findById(resolvedCategoryId)
+                    .orElseThrow(() -> new IllegalArgumentException("Category not found"));
+
+            Business business = new Business();
+            business.setName(businessRequest.getName().trim());
+            business.setLocation(businessRequest.getLocation().trim());
+            business.setPhone(businessRequest.getPhone() != null ? businessRequest.getPhone().trim() : null);
+            business.setEmail(businessRequest.getEmail() != null ? businessRequest.getEmail().trim() : null);
+            business.setDescription(businessRequest.getDescription() != null ? businessRequest.getDescription().trim() : null);
+            business.setEnableResources(Boolean.FALSE);
+            business.setEnableServices(Boolean.FALSE);
+            business.setOwner(savedUser);
+            business.setCategory(category);
+            businessRepository.save(business);
+
+            if (feedbackRequest != null) {
+                industryFeedbackService.submitFeedback(IndustryFeedbackRequest.builder()
+                        .industryName(feedbackRequest.getIndustryName())
+                        .description(feedbackRequest.getDescription())
+                        .phoneNumber(feedbackRequest.getPhoneNumber())
+                        .sourceSlug(feedbackRequest.getSourceSlug())
+                    .sourceCategoryName(feedbackRequest.getSourceCategoryName())
+                        .contactEmail(feedbackRequest.getContactEmail())
+                        .build());
+            }
+        }
+
         // 8. Si non VERIFIED, créer un token d'activation et envoyer l'email
         if (savedUser.getStatus() != UserStatusEnum.VERIFIED) {
             String activationTokenValue = UUID.randomUUID().toString();
@@ -116,6 +169,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(savedUser.getRole())
                 .status(savedUser.getStatus())
                 .avatar(savedUser.getAvatarUrl())
+            .hasBusiness(role == RoleEnum.BUSINESS_OWNER ? Boolean.TRUE : null)
                 .message(savedUser.getStatus() == UserStatusEnum.VERIFIED
                         ? "Administrator signup successful. The account is already verified."
                         : "Signup successful. Please check your email to activate your account.")
@@ -214,6 +268,7 @@ public class AuthServiceImpl implements AuthService {
             boolean hasBusiness = false;
             Long businessId = null;
             String businessName = null;
+            String businessCategoryName = null;
             boolean isAlsoStaff = false;
             Long staffId = null;
 
@@ -223,6 +278,7 @@ public class AuthServiceImpl implements AuthService {
                 hasBusiness = true;
                 businessId = b.getId();
                 businessName = b.getName();
+                businessCategoryName = b.getCategory() != null ? b.getCategory().getName() : null;
             }
 
             // Check if this BO also has a staff record in their business
@@ -237,6 +293,7 @@ public class AuthServiceImpl implements AuthService {
             builder.hasBusiness(hasBusiness)
                     .businessId(businessId)
                     .businessName(businessName)
+                    .businessCategoryName(businessCategoryName)
                     .isAlsoStaff(isAlsoStaff)
                     .staffId(staffId);
         }
@@ -248,7 +305,8 @@ public class AuthServiceImpl implements AuthService {
                 Business b = maybeStaff.get().getBusiness();
                 builder.hasBusiness(true)
                         .businessId(b.getId())
-                        .businessName(b.getName());
+                        .businessName(b.getName())
+                        .businessCategoryName(b.getCategory() != null ? b.getCategory().getName() : null);
             }
         }
 
@@ -337,7 +395,8 @@ public class AuthServiceImpl implements AuthService {
                 Business b = maybeBusiness.get();
                 builder.hasBusiness(true)
                         .businessId(b.getId())
-                        .businessName(b.getName());
+                        .businessName(b.getName())
+                        .businessCategoryName(b.getCategory() != null ? b.getCategory().getName() : null);
             } else {
                 builder.hasBusiness(false);
             }
