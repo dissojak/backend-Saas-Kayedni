@@ -24,6 +24,11 @@ public class BusinessProfileAdapter implements BusinessProfile {
     }
 
     @Override
+    public Long getCategoryId() {
+        return b.getCategory() != null ? b.getCategory().getId() : null;
+    }
+
+    @Override
     public String getCategoryName() {
         return b.getCategory() != null ? nz(b.getCategory().getName()) : "";
     }
