@@ -47,6 +47,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/v1/auth/activate",
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/reset-password",
+            "/v1/feedback/other",
+            "/api/v1/feedback/other",
             "/api/v1/businesses/{businessId}/staffMembers",
             // Public endpoint to list services for a business (context path /api is prefixed at runtime)
             "/api/v1/businesses/{businessId}/services",

@@ -1,7 +1,7 @@
 package com.bookify.backendbookify_saas.email_SMTP;
 
-import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -191,5 +191,10 @@ public class MailServiceImpl implements MailService {
             log.error("Unexpected error sending simple email to {}: {}", to, e.getMessage());
             throw new RuntimeException("Failed to send email", e);
         }
+    }
+
+    @Override
+    public void sendRichMessage(String to, String subject, String plainText, String html) {
+        sendHtmlEmail(to, subject, plainText, html);
     }
 }

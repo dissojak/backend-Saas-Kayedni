@@ -1,6 +1,12 @@
 package com.bookify.backendbookify_saas;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -10,12 +16,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 @SpringBootApplication
 @EnableScheduling
@@ -42,6 +42,13 @@ public class BackendBookifySaasApplication {
         setIfPresent("BOOKING_NOTIFICATIONS_TELEGRAM_CHAT_ID", "BOOKING_NOTIFICATIONS_TELEGRAM_CHAT_ID");
         setIfPresent("BOOKING_NOTIFICATIONS_STAFF_ALERT_TELEGRAM_BOT_TOKEN", "BOOKING_NOTIFICATIONS_STAFF_ALERT_TELEGRAM_BOT_TOKEN");
         setIfPresent("BOOKING_NOTIFICATIONS_STAFF_ALERT_TELEGRAM_CHAT_ID", "BOOKING_NOTIFICATIONS_STAFF_ALERT_TELEGRAM_CHAT_ID");
+
+        // Flow B admin alert variables
+        setIfPresent("FLOW_B_ADMIN_ALERT_EMAIL_ENABLED", "FLOW_B_ADMIN_ALERT_EMAIL_ENABLED");
+        setIfPresent("FLOW_B_ADMIN_ALERT_EMAIL", "FLOW_B_ADMIN_ALERT_EMAIL");
+        setIfPresent("FLOW_B_ADMIN_TELEGRAM_ENABLED", "FLOW_B_ADMIN_TELEGRAM_ENABLED");
+        setIfPresent("FLOW_B_ADMIN_TELEGRAM_BOT_TOKEN", "FLOW_B_ADMIN_TELEGRAM_BOT_TOKEN");
+        setIfPresent("FLOW_B_ADMIN_TELEGRAM_CHAT_ID", "FLOW_B_ADMIN_TELEGRAM_CHAT_ID");
     }
 
     private static void setIfPresent(String dotenvKey, String systemPropertyKey) {
