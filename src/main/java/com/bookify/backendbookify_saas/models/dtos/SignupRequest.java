@@ -3,6 +3,7 @@ package com.bookify.backendbookify_saas.models.dtos;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -37,4 +38,8 @@ public class SignupRequest {
 
     // Champ optionnel: si null, sera considéré comme CLIENT côté service
     private RoleEnum role;
+
+    // Optional for non-owner roles, required in service for BUSINESS_OWNER signup flow
+    @Valid
+    private SignupBusinessRequest business;
 }

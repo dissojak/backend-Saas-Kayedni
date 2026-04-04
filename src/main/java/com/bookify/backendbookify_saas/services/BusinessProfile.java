@@ -3,6 +3,7 @@ package com.bookify.backendbookify_saas.services;
 public interface BusinessProfile {
     String getName();
     String getLocation();
+    Long getCategoryId();
     String getCategoryName();
     String getPhone();
     String getEmail();

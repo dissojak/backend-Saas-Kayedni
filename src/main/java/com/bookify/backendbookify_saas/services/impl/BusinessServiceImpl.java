@@ -4,7 +4,6 @@ import com.bookify.backendbookify_saas.models.dtos.BusinessSearchDto;
 import com.bookify.backendbookify_saas.models.entities.*;
 import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BusinessStatus;
-import com.bookify.backendbookify_saas.repositories.BusinessEvaluationRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.BusinessService;
@@ -22,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -30,8 +28,7 @@ public class BusinessServiceImpl implements BusinessService {
 
     private final BusinessRepository businessRepository;
     private final UserRepository userRepository;
-    private final BusinessEvaluationService evaluationService; // conservé pour usage futur mais non appelé ici
-    private final BusinessEvaluationRepository evaluationRepository;
+    private final BusinessEvaluationService evaluationService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -76,12 +73,11 @@ public class BusinessServiceImpl implements BusinessService {
         business.setPhone(phone);
         business.setEmail(email);
         business.setDescription(description);
+        business.setEnableResources(Boolean.FALSE);
+        business.setEnableServices(Boolean.FALSE);
         business.setOwner(user);
         business.setCategory(category);
         Business saved = businessRepository.save(business);
-
-        // Trigger evaluation after business is fully persisted
-        evaluationService.evaluateAndSave(saved);
 
         return saved;
     }
@@ -180,22 +176,24 @@ public class BusinessServiceImpl implements BusinessService {
                 if (ownerId == null || !ownerId.equals(actorId)) {
                     throw new com.bookify.backendbookify_saas.exceptions.UnauthorizedAccessException("You are not the owner of this business");
                 }
-                // Check latest evaluation: if overall > 70, auto-activate
+
+                // Owner submission flow: trigger fresh evaluation on submit/resubmit.
+                // Rule: overall > 70 => ACTIVE, else keep PENDING.
+                business.setStatus(newStatus);
                 try {
-                    List<BusinessEvaluation> evals = evaluationRepository.findByBusinessOrderByCreatedAtDesc(business);
-                    if (!evals.isEmpty()) {
-                        int overall = evals.get(0).getOverallScore();
-                        if (overall > 70) {
-                            log.info("Auto-activating business {} because overall score {} > 70", businessId, overall);
-                            business.setStatus(com.bookify.backendbookify_saas.models.enums.BusinessStatus.ACTIVE);
-                            break;
-                        }
+                    BusinessEvaluation evaluation = evaluationService.evaluateAndSave(business);
+                    int overall = evaluation.getOverallScore();
+                    if (overall > 70) {
+                        log.info("Auto-activating business {} after submit-for-review (overall={})", businessId, overall);
+                        business.setStatus(com.bookify.backendbookify_saas.models.enums.BusinessStatus.ACTIVE);
+                    } else {
+                        business.setStatus(newStatus);
+                        log.info("Business {} stays PENDING after submit-for-review (overall={})", businessId, overall);
                     }
                 } catch (Exception ex) {
-                    log.warn("Failed to read evaluations for business {}: {}", businessId, ex.getMessage());
-                    // Fall back to PENDING
+                    business.setStatus(newStatus);
+                    log.warn("Business {} submitted for review but evaluation failed: {}", businessId, ex.getMessage());
                 }
-                business.setStatus(newStatus);
             }
             case ACTIVE -> {
                 // Only admin can activate

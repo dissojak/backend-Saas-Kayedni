@@ -8,12 +8,6 @@ import com.bookify.backendbookify_saas.services.BusinessProfile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,10 +18,19 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+
 @Service("businessEvaluationService")
 @RequiredArgsConstructor
 @Slf4j
 public class BusinessEvaluationService {
+
+    private static final Long OTHER_CATEGORY_ID = 25L;
 
     private final BusinessEvaluationRepository evaluationRepository;
     private final BusinessImageRepository imageRepository;
@@ -384,6 +387,13 @@ public class BusinessEvaluationService {
     }
 
     private void applyThresholdsAndComputeOverall(BusinessProfile p, EvaluationResult r) {
+        // Business rule: "Other" category (id 25) always gets full category score.
+        if (OTHER_CATEGORY_ID.equals(p.getCategoryId())) {
+            r.categoryScore = 100;
+            r.categoryDetails = "Category score set to 100 by rule for 'Other' category.";
+            r.categorySuggestions = null;
+        }
+
         // Threshold-based suggestion visibility and inlining where columns don't exist
         if (r.nameScore >= 70) r.nameSuggestions = null;
 

@@ -34,4 +34,16 @@ public interface MailService {
      * @param text Contenu de l'email
      */
     void sendSimpleMessage(String to, String subject, String text);
+
+    /**
+     * Sends an email with both plain-text and HTML versions.
+     * Falls back to plain text on implementations that do not override this method.
+     * @param to Email recipient
+     * @param subject Email subject
+     * @param plainText Plain-text body
+     * @param html HTML body
+     */
+    default void sendRichMessage(String to, String subject, String plainText, String html) {
+        sendSimpleMessage(to, subject, plainText);
+    }
 }

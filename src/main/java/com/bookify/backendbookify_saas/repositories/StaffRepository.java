@@ -1,14 +1,14 @@
 package com.bookify.backendbookify_saas.repositories;
 
 import com.bookify.backendbookify_saas.models.entities.Staff;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.repository.query.Param;
-
 import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 
 public interface StaffRepository extends JpaRepository<Staff, Long> {
 
@@ -44,7 +44,7 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
 
     // Return DTOs directly using JPQL constructor expression to avoid manual mapping in controllers
     @Query("SELECT new com.bookify.backendbookify_saas.models.dtos.UserProfileResponse(" +
-           "s.id, s.name, s.email, s.phoneNumber, s.role, s.status, s.avatarUrl, null, null, null, s.defaultStartTime, s.defaultEndTime) " +
+            "s.id, s.name, s.email, s.phoneNumber, s.role, s.status, s.avatarUrl, null, null, null, null, s.defaultStartTime, s.defaultEndTime) " +
            "FROM Staff s WHERE s.employerBusiness.id = :businessId")
     List<com.bookify.backendbookify_saas.models.dtos.UserProfileResponse> findUserProfileResponsesByBusinessId(@Param("businessId") Long businessId);
 

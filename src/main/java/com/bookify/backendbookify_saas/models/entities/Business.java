@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+
 @Entity
 @Table(name = "businesses",
         uniqueConstraints = @UniqueConstraint(name = "uq_business_owner", columnNames = "owner_id"))
@@ -43,6 +44,12 @@ public class Business {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BusinessStatus status = BusinessStatus.DRAFT;
+
+    @Column(name = "enable_resources", nullable = false)
+    private Boolean enableResources = Boolean.FALSE;
+
+    @Column(name = "enable_services", nullable = false)
+    private Boolean enableServices = Boolean.FALSE;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -137,6 +144,8 @@ public class Business {
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (status == null) status = BusinessStatus.DRAFT;
+        if (enableResources == null) enableResources = Boolean.FALSE;
+        if (enableServices == null) enableServices = Boolean.FALSE;
     }
 
     @PreUpdate

@@ -22,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 
 
+
 /**
  * Configuration de sécurité pour l'application
  */
@@ -54,6 +55,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/activate",
                                 "/api/v1/auth/forgot-password",
                                 "/api/v1/auth/reset-password",
+                                "/v1/feedback/other",
+                                "/api/v1/feedback/other",
                                 "/api/v1/businesses/{businessId}/staffMembers",
                                 "/api/v1/staff/{staffId}/services",
                                 // Health check endpoints (public)

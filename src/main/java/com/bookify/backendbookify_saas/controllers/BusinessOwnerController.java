@@ -235,7 +235,7 @@ public class BusinessOwnerController {
             throw new IllegalArgumentException("Invalid status value");
         }
 
-        // Enforce PENDING special logic: if BO requests PENDING, check evaluation overall
+        // Owner submission logic: when status is set to PENDING, business is submitted for review.
         boolean requestedByOwner = !actorIsAdmin;
 
         var changed = businessService.changeBusinessStatus(businessId, newStatus, actorId, actorIsAdmin);
@@ -249,7 +249,7 @@ public class BusinessOwnerController {
                 int overall = 0;
                 if (!evalList.isEmpty()) overall = evalList.get(0).getOverallScore();
                 return ResponseEntity.ok(Map.of(
-                        "message", "Congratulations! Your business has been activated.",
+                        "message", "Your business is now active.",
                         "overallScore", overall,
                         "status", "ACTIVE"
                 ));
@@ -263,23 +263,24 @@ public class BusinessOwnerController {
 
                 if (overall <= 70) {
                     return ResponseEntity.ok(Map.of(
-                            "message", "Your business was submitted for review, but the evaluation overall score is <= 70.",
+                            "message", "Submitted for review. Your current score is 70 or below.",
                             "overallScore", overall,
-                            "advice", "Enhance your business information (name, email, description, location) to improve the evaluation or wait for an admin to activate it. Activation is not guaranteed.",
+                            "advice", "Improve your business details (name, email, description, location), then re-submit.",
                             "status", "PENDING"
                     ));
                 }
 
-                // overall > 70 but service did not auto-activate for some reason
+                // Safety fallback: overall > 70 but service did not auto-activate.
                 return ResponseEntity.ok(Map.of(
-                        "message", "Your business was submitted for review. The evaluation overall score is above 70 but activation still requires admin approval.",
+                        "message", "Reviewed successfully, but activation has not been applied yet.",
                         "overallScore", overall,
-                        "advice", "You can wait for an admin to activate it or further improve your information to maximize the chance of activation."
+                        "advice", "Please re-submit. If this continues, contact support.",
+                        "status", "PENDING"
                 ));
             }
         }
 
-        return ResponseEntity.ok(Map.of("message", "Business status updated", "status", changed.getStatus()));
+        return ResponseEntity.ok(Map.of("message", "Business status updated successfully.", "status", changed.getStatus()));
     }
 
     @PostMapping("/{businessId}/reevaluate")
