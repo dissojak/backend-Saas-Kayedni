@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthServiceImpl.class);
-    private static final Long OTHER_INDUSTRY_CATEGORY_ID = 25L;
+    private static final Long OTHER_INDUSTRY_CATEGORY_ID = 10L;
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository activationTokenRepository;

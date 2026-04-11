@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService {
 
-    private static final Long EXCLUDED_SIGNUP_CATEGORY_ID = 25L; // ID of the "Other industry" category to exclude from general listings
+    private static final Long EXCLUDED_SIGNUP_CATEGORY_ID = 10L; // ID of the "Other industry" category to exclude from general listings
 
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;

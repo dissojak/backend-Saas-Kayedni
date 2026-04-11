@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class BusinessEvaluationService {
 
-    private static final Long OTHER_CATEGORY_ID = 25L;
+    private static final Long OTHER_CATEGORY_ID = 10L;
 
     private final BusinessEvaluationRepository evaluationRepository;
     private final BusinessImageRepository imageRepository;
