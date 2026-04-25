@@ -39,3 +39,6 @@ build/
 *.log
 hs_err_pid*.log
 backend.log
+
+# macOS metadata
+.DS_Store

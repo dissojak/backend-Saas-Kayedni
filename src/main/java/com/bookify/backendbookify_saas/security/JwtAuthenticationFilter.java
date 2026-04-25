@@ -268,6 +268,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String businessSearchRegex = "^/((api/)?)v1/businesses/search/?$";
         if (requestPath.matches(businessSearchRegex)) return "REGEX:/v1/businesses/search";
 
+        // categories listing and search should always be public for GET requests
+        String categoriesRegex = "^/((api/)?)v1/categories(/search)?/?$";
+        if (requestPath.matches(categoriesRegex) && isGet) return "REGEX:/v1/categories";
+
         // Fallback: check literal public prefixes (static endpoints)
         for (String prefix : PUBLIC_URLS) {
             if (requestPath.startsWith(prefix)) return prefix;
