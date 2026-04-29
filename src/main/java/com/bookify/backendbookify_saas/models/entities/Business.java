@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+
 @Entity
 @Table(name = "businesses",
         uniqueConstraints = @UniqueConstraint(name = "uq_business_owner", columnNames = "owner_id"))
@@ -56,6 +57,12 @@ public class Business {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "qr_code_url", length = 2048)
+    private String qrCodeUrl;
+
+    @Column(name = "qr_updated_at")
+    private LocalDateTime qrUpdatedAt;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false, unique = true,

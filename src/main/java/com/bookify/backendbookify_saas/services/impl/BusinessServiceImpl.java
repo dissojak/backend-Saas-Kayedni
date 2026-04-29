@@ -6,6 +6,7 @@ import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BusinessStatus;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
+import com.bookify.backendbookify_saas.services.BusinessQrService;
 import com.bookify.backendbookify_saas.services.BusinessService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -29,6 +30,7 @@ public class BusinessServiceImpl implements BusinessService {
     private final BusinessRepository businessRepository;
     private final UserRepository userRepository;
     private final BusinessEvaluationService evaluationService;
+    private final BusinessQrService businessQrService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -133,6 +135,9 @@ public class BusinessServiceImpl implements BusinessService {
             weekendChanged = existing.getWeekendDay() == null || !existing.getWeekendDay().equals(businessInput.getWeekendDay());
             existing.setWeekendDay(businessInput.getWeekendDay());
         }
+
+        regenerateQrOnActiveNameChange(existing, nameChanged);
+
         Business updated = businessRepository.save(existing);
 
         // Only update evaluation if relevant fields changed
@@ -225,6 +230,8 @@ public class BusinessServiceImpl implements BusinessService {
             }
             default -> throw new IllegalArgumentException("Unsupported status change");
         }
+
+        regenerateQrOnActiveStatus(business, "status-change");
 
         return businessRepository.save(business);
     }
@@ -404,5 +411,17 @@ public class BusinessServiceImpl implements BusinessService {
                 .imageUrl(img)
                 .description(b.getDescription())
                 .build();
+    }
+
+    private void regenerateQrOnActiveStatus(Business business, String triggerSource) {
+        if (business.getStatus() == BusinessStatus.ACTIVE) {
+            businessQrService.regenerateForBusiness(business, triggerSource);
+        }
+    }
+
+    private void regenerateQrOnActiveNameChange(Business business, boolean nameChanged) {
+        if (nameChanged && business.getStatus() == BusinessStatus.ACTIVE) {
+            businessQrService.regenerateForBusiness(business, "name-change");
+        }
     }
 }

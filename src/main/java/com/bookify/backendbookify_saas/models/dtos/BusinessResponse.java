@@ -1,11 +1,12 @@
 package com.bookify.backendbookify_saas.models.dtos;
 
 import com.bookify.backendbookify_saas.models.enums.BusinessStatus;
-import java.time.DayOfWeek;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.DayOfWeek;
 
 @Data
 @Builder
@@ -34,6 +35,9 @@ public class BusinessResponse {
     
     // First image URL (can be null)
     private String firstImageUrl;
+
+    private String qrCodeUrl;
+    private java.time.LocalDateTime qrUpdatedAt;
 
     // Single nullable weekend day for the business (e.g. MONDAY). Null means none configured.
     private DayOfWeek weekendDay;

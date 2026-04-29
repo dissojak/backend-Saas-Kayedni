@@ -176,7 +176,9 @@ public class BusinessPublicController {
                 .description(b.getDescription())
                 .rating(avgRating)
                 .reviewCount(ratingCount)
-                .firstImageUrl(firstImageUrl);
+                .firstImageUrl(firstImageUrl)
+                .qrCodeUrl(b.getQrCodeUrl())
+                .qrUpdatedAt(b.getQrUpdatedAt());
 
         if (b.getCategory() != null) {
             builder.categoryId(b.getCategory().getId())

@@ -83,6 +83,8 @@ public class BusinessOwnerController {
                 .description(created.getDescription())
                 .evaluation(evalDto)
                 .firstImageUrl(firstImage)
+                .qrCodeUrl(created.getQrCodeUrl())
+                .qrUpdatedAt(created.getQrUpdatedAt())
                 .weekendDay(created.getWeekendDay())
                 .build();
 
@@ -114,6 +116,8 @@ public class BusinessOwnerController {
                 .description(business.getDescription())
                 .evaluation(evalDto)
                 .firstImageUrl(firstImage)
+                .qrCodeUrl(business.getQrCodeUrl())
+                .qrUpdatedAt(business.getQrUpdatedAt())
                 .weekendDay(business.getWeekendDay())
                 .build();
 
@@ -200,6 +204,8 @@ public class BusinessOwnerController {
                 .description(updated.getDescription())
                 .evaluation(evalDto)
                 .firstImageUrl(firstImage)
+                .qrCodeUrl(updated.getQrCodeUrl())
+                .qrUpdatedAt(updated.getQrUpdatedAt())
                 .weekendDay(updated.getWeekendDay())
                 .build();
         return ResponseEntity.ok(response);
@@ -357,6 +363,8 @@ public class BusinessOwnerController {
                 .description(business.getDescription())
                 .evaluation(evalDto)
                 .firstImageUrl(firstImage)
+                .qrCodeUrl(business.getQrCodeUrl())
+                .qrUpdatedAt(business.getQrUpdatedAt())
                 .weekendDay(business.getWeekendDay())
                 .build();
 
