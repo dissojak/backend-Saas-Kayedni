@@ -1,5 +1,6 @@
 package com.bookify.backendbookify_saas.controllers;
 
+import com.bookify.backendbookify_saas.exceptions.BookingSlotContentionException;
 import com.bookify.backendbookify_saas.exceptions.BookingTooSoonException;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingCreateRequest;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingResponse;
@@ -8,11 +9,14 @@ import com.bookify.backendbookify_saas.services.BookingNotificationService;
 import com.bookify.backendbookify_saas.services.impl.BookingServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +25,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-
 
 /**
  * REST Controller for Booking operations.
@@ -81,6 +84,12 @@ public class BookingController {
                     "errorCode", "BOOKING_TOO_SOON",
                     "error", e.getMessage(),
                     "minLeadMinutes", e.getMinLeadMinutes()
+            ));
+        } catch (BookingSlotContentionException e) {
+            log.warn("Booking slot contention: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "errorCode", "BOOKING_SLOT_CONTENTION",
+                    "error", e.getMessage()
             ));
         } catch (RuntimeException e) {
             log.error("Booking creation failed: {}", e.getMessage());
@@ -326,6 +335,12 @@ public class BookingController {
                     "errorCode", "BOOKING_TOO_SOON",
                     "error", e.getMessage(),
                     "minLeadMinutes", e.getMinLeadMinutes()
+            ));
+        } catch (BookingSlotContentionException e) {
+            log.warn("Reschedule slot contention: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "errorCode", "BOOKING_SLOT_CONTENTION",
+                    "error", e.getMessage()
             ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

@@ -1,34 +1,48 @@
 package com.bookify.backendbookify_saas.services.impl;
 
+import com.bookify.backendbookify_saas.exceptions.BookingSlotContentionException;
 import com.bookify.backendbookify_saas.exceptions.BookingTooSoonException;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingCreateRequest;
 import com.bookify.backendbookify_saas.models.dtos.ServiceBookingResponse;
-import com.bookify.backendbookify_saas.models.entities.*;
+import com.bookify.backendbookify_saas.models.entities.Booking;
+import com.bookify.backendbookify_saas.models.entities.Business;
+import com.bookify.backendbookify_saas.models.entities.BusinessClient;
+import com.bookify.backendbookify_saas.models.entities.Service;
+import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
+import com.bookify.backendbookify_saas.models.entities.ServiceBookingOccupancy;
+import com.bookify.backendbookify_saas.models.entities.Staff;
+import com.bookify.backendbookify_saas.models.entities.StaffAvailability;
+import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.enums.AvailabilityStatus;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
-import com.bookify.backendbookify_saas.repositories.*;
+import com.bookify.backendbookify_saas.repositories.BookingRepository;
+import com.bookify.backendbookify_saas.repositories.BusinessClientRepository;
+import com.bookify.backendbookify_saas.repositories.BusinessRepository;
+import com.bookify.backendbookify_saas.repositories.ServiceBookingOccupancyRepository;
+import com.bookify.backendbookify_saas.repositories.ServiceBookingRepository;
+import com.bookify.backendbookify_saas.repositories.ServiceRepository;
+import com.bookify.backendbookify_saas.repositories.StaffAvailabilityRepository;
+import com.bookify.backendbookify_saas.repositories.StaffRepository;
+import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.BookingNotificationService;
 import com.bookify.backendbookify_saas.services.BookingService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.stereotype.Service;
-
-
-
 
 /**
  * Implementation of BookingService with support for both User and BusinessClient.
  * Conflict detection is staff-based, not service-based.
  */
-@Service
+@org.springframework.stereotype.Service
 @RequiredArgsConstructor
 @Slf4j
 public class BookingServiceImpl implements BookingService {
@@ -42,6 +56,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final StaffRepository staffRepository;
     private final StaffAvailabilityRepository staffAvailabilityRepository;
+    private final ServiceBookingOccupancyRepository serviceBookingOccupancyRepository;
     private final BusinessRepository businessRepository;
     private final BookingNotificationService bookingNotificationService;
 
@@ -106,9 +121,9 @@ public class BookingServiceImpl implements BookingService {
             throw new RuntimeException("Staff does not belong to the same business as the service");
         }
 
-        // 1. Check staff availability for the date
+        // 1. Check staff availability for the date (no day-level lock)
         Optional<StaffAvailability> availabilityOpt = staffAvailabilityRepository.findByStaff_IdAndDate(
-                request.getStaffId(), request.getDate());
+            request.getStaffId(), request.getDate());
         
         if (availabilityOpt.isEmpty()) {
             throw new RuntimeException("Staff has no availability data for this date");
@@ -126,16 +141,11 @@ public class BookingServiceImpl implements BookingService {
                     availability.getStartTime() + " - " + availability.getEndTime() + ")");
         }
 
-        // 3. Check for conflicting bookings (STAFF-BASED, not service-based)
+        // 3. Fast read for user-friendly response before the guaranteed occupancy write.
         boolean hasConflict = serviceBookingRepository.existsOverlappingForStaff(
-                request.getStaffId(),
-                request.getDate(),
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        
+                request.getStaffId(), request.getDate(), request.getStartTime(), request.getEndTime());
         if (hasConflict) {
-            throw new RuntimeException("Time slot is already booked for this staff member");
+            throw new BookingSlotContentionException("Time slot is already booked for this staff member. Please retry with a different time.");
         }
 
         // Build the booking
@@ -173,6 +183,9 @@ public class BookingServiceImpl implements BookingService {
                 staff.getId(), request.getDate(), request.getStartTime(), request.getEndTime());
 
         ServiceBooking savedBooking = serviceBookingRepository.saveAndFlush(booking);
+        if (isSlotBlockingStatus(savedBooking.getStatus())) {
+            reserveOccupancy(savedBooking);
+        }
 
         if (savedBooking.getStatus() == BookingStatusEnum.PENDING) {
             safeNotifyStaffActionRequired(savedBooking);
@@ -188,6 +201,12 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
         BookingStatusEnum previousStatus = existing.getStatus();
+        boolean wasBlocking = isSlotBlockingStatus(previousStatus);
+        boolean willBeBlocking = isSlotBlockingStatus(booking.getStatus());
+
+        if (wasBlocking) {
+            serviceBookingOccupancyRepository.deleteByBookingId(existing.getId());
+        }
 
         existing.setDate(booking.getDate());
         existing.setStartTime(booking.getStartTime());
@@ -197,6 +216,9 @@ public class BookingServiceImpl implements BookingService {
         existing.setPrice(booking.getPrice());
 
         ServiceBooking saved = serviceBookingRepository.saveAndFlush(existing);
+        if (willBeBlocking) {
+            reserveOccupancy(saved);
+        }
         if (previousStatus != saved.getStatus()) {
             safeNotifyStatusChange(saved, previousStatus);
         }
@@ -210,9 +232,18 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
         BookingStatusEnum previousStatus = booking.getStatus();
+        boolean wasBlocking = isSlotBlockingStatus(previousStatus);
+        boolean willBeBlocking = isSlotBlockingStatus(status);
 
         booking.setStatus(status);
         ServiceBooking saved = serviceBookingRepository.saveAndFlush(booking);
+
+        if (wasBlocking && !willBeBlocking) {
+            serviceBookingOccupancyRepository.deleteByBookingId(saved.getId());
+        } else if (!wasBlocking && willBeBlocking) {
+            reserveOccupancy(saved);
+        }
+
         safeNotifyStatusChange(saved, previousStatus);
         return saved;
     }
@@ -311,6 +342,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         ServiceBooking saved = serviceBookingRepository.saveAndFlush(booking);
+        serviceBookingOccupancyRepository.deleteByBookingId(saved.getId());
         if (initiatedByClient) {
             safeNotifyStaffClientCancellation(saved, previousStatus);
         } else {
@@ -324,6 +356,7 @@ public class BookingServiceImpl implements BookingService {
         if (!serviceBookingRepository.existsById(id)) {
             throw new RuntimeException("Booking not found");
         }
+        serviceBookingOccupancyRepository.deleteByBookingId(id);
         serviceBookingRepository.deleteById(id);
     }
 
@@ -348,34 +381,40 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalArgumentException("Cannot reschedule a " + booking.getStatus().name().toLowerCase() + " booking");
         }
 
-        // Calculate end time if not provided (use service duration)
+        validateBookingLeadTime(newDate, newStartTime);
+
+        // Calculate final end time if not provided (use service duration)
+        final LocalTime finalEndTime;
         if (newEndTime == null) {
             Integer durationMinutes = booking.getService().getDurationMinutes();
             if (durationMinutes == null) durationMinutes = 30; // default 30 minutes
-            newEndTime = newStartTime.plusMinutes(durationMinutes);
+            finalEndTime = newStartTime.plusMinutes(durationMinutes);
+        } else {
+            finalEndTime = newEndTime;
         }
 
-        validateBookingLeadTime(newDate, newStartTime);
-
-        // Check if the new time slot is available using existing repository method
         Long staffId = booking.getStaff().getId();
         List<ServiceBooking> conflictingBookings = serviceBookingRepository.findByStaffIdAndDateExcludingCancelled(staffId, newDate);
-        
         for (ServiceBooking existing : conflictingBookings) {
-            if (existing.getId().equals(bookingId)) continue; // Skip self
-            if (newStartTime.isBefore(existing.getEndTime()) && newEndTime.isAfter(existing.getStartTime())) {
-                throw new IllegalArgumentException("The selected time slot is not available");
+            if (existing.getId().equals(bookingId)) {
+                continue;
+            }
+            if (newStartTime.isBefore(existing.getEndTime()) && finalEndTime.isAfter(existing.getStartTime())) {
+                throw new BookingSlotContentionException("The selected time slot is not available. Please retry with a different time.");
             }
         }
+
+        serviceBookingOccupancyRepository.deleteByBookingId(bookingId);
 
         // Update booking
         BookingStatusEnum previousStatus = booking.getStatus();
         booking.setDate(newDate);
         booking.setStartTime(newStartTime);
-        booking.setEndTime(newEndTime);
+        booking.setEndTime(finalEndTime);
         booking.setStatus(BookingStatusEnum.PENDING); // Reset to pending after reschedule
         
         serviceBookingRepository.saveAndFlush(booking);
+        reserveOccupancy(booking);
         
         // Re-fetch with all associations to avoid lazy loading issues when mapping to response
         ServiceBooking saved = serviceBookingRepository.findByIdWithServiceAndBusiness(bookingId)
@@ -404,6 +443,36 @@ public class BookingServiceImpl implements BookingService {
         if (!requestedStart.isAfter(minAllowedStart)) {
             throw new BookingTooSoonException(MIN_BOOKING_LEAD_MINUTES);
         }
+    }
+
+    private void reserveOccupancy(ServiceBooking booking) {
+        try {
+            serviceBookingOccupancyRepository.saveAll(toOccupancyRows(booking));
+            serviceBookingOccupancyRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw new BookingSlotContentionException("Time slot is being booked by another request. Please retry.", ex);
+        }
+    }
+
+    private List<ServiceBookingOccupancy> toOccupancyRows(ServiceBooking booking) {
+        int startMinute = booking.getStartTime().toSecondOfDay() / 60;
+        int endMinute = booking.getEndTime().toSecondOfDay() / 60;
+
+        List<ServiceBookingOccupancy> rows = new ArrayList<>(Math.max(0, endMinute - startMinute));
+        for (int slot = startMinute; slot < endMinute; slot++) {
+            rows.add(new ServiceBookingOccupancy(
+                    null,
+                    booking.getId(),
+                    booking.getStaff().getId(),
+                    booking.getDate(),
+                    slot
+            ));
+        }
+        return rows;
+    }
+
+    private boolean isSlotBlockingStatus(BookingStatusEnum status) {
+        return status == BookingStatusEnum.PENDING || status == BookingStatusEnum.CONFIRMED;
     }
 
     private void safeNotifyStaffActionRequired(ServiceBooking booking) {
