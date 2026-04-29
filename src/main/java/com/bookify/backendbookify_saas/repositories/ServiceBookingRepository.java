@@ -5,15 +5,14 @@ import com.bookify.backendbookify_saas.models.entities.Service;
 import com.bookify.backendbookify_saas.models.entities.ServiceBooking;
 import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 
 /**
@@ -81,7 +80,7 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
      * Find all bookings for a specific staff member on a specific date.
      * Excludes cancelled bookings.
      */
-    @Query("SELECT sb FROM ServiceBooking sb WHERE sb.staff.id = :staffId AND sb.date = :date AND sb.status <> com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CANCELLED")
+       @Query("SELECT sb FROM ServiceBooking sb WHERE sb.staff.id = :staffId AND sb.date = :date AND sb.status IN (com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.PENDING, com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CONFIRMED)")
     List<ServiceBooking> findByStaffIdAndDateExcludingCancelled(@Param("staffId") Long staffId, @Param("date") LocalDate date);
 
     /**
@@ -101,8 +100,15 @@ public interface ServiceBookingRepository extends JpaRepository<ServiceBooking, 
      * Check for overlapping bookings for a staff member (correct conflict detection).
      * Uses LocalTime for start/end since Booking entity uses LocalTime.
      */
-    @Query("SELECT COUNT(sb) > 0 FROM ServiceBooking sb WHERE sb.staff.id = :staffId AND sb.date = :date AND sb.startTime < :endTime AND sb.endTime > :startTime AND sb.status <> com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CANCELLED")
+       @Query("SELECT COUNT(sb) > 0 FROM ServiceBooking sb WHERE sb.staff.id = :staffId AND sb.date = :date AND sb.startTime < :endTime AND sb.endTime > :startTime AND sb.status IN (com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.PENDING, com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CONFIRMED)")
     boolean existsOverlappingForStaff(@Param("staffId") Long staffId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
+
+       /**
+        * Lock only overlapping rows for the requested slot.
+        */
+       @Lock(LockModeType.PESSIMISTIC_WRITE)
+       @Query("SELECT sb FROM ServiceBooking sb WHERE sb.staff.id = :staffId AND sb.date = :date AND sb.startTime < :endTime AND sb.endTime > :startTime AND sb.status IN (com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.PENDING, com.bookify.backendbookify_saas.models.enums.BookingStatusEnum.CONFIRMED)")
+       List<ServiceBooking> findAndLockOverlappingForStaff(@Param("staffId") Long staffId, @Param("date") LocalDate date, @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
 
     /**
      * Find bookings by client (User) ID

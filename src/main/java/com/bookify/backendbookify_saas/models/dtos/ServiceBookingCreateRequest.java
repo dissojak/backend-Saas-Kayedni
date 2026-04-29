@@ -2,14 +2,10 @@ package com.bookify.backendbookify_saas.models.dtos;
 
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+
 
 /**
  * DTO for creating a service booking
@@ -17,6 +13,7 @@ import java.time.LocalTime;
  */
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ServiceBookingCreateRequest {
