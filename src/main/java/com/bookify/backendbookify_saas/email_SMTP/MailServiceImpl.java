@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +28,14 @@ public class MailServiceImpl implements MailService {
     @Value("${application.base-url:http://localhost:8088}")
     private String baseUrl;
 
+    @Value("${application.frontend-base-url:http://54.38.183.201/frontend}")
+    private String frontendBaseUrl;
     @Value("${application.logo-url:https://res.cloudinary.com/duvougrqx/image/upload/v1761066622/Bookify/favicon_ivhxzf.png}")
     private String logoUrl;
 
     @Override
     public void sendActivationEmail(String recipientEmail, String recipientName, String activationToken) {
-        String activationLink = baseUrl + "/v1/auth/activate?token=" + activationToken;
+        String activationLink = buildActivationLink(activationToken);
         String subject = "Activate your Kayedni account";
 
         String html = buildActivationHtml(recipientName, activationLink);
@@ -41,6 +45,13 @@ public class MailServiceImpl implements MailService {
         );
 
         sendHtmlEmail(recipientEmail, subject, plain, html);
+    }
+
+    private String buildActivationLink(String token) {
+        String base = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
+        if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        String encoded = URLEncoder.encode(token == null ? "" : token, StandardCharsets.UTF_8);
+        return base + "/activate?token=" + encoded;
     }
 
     @Override
