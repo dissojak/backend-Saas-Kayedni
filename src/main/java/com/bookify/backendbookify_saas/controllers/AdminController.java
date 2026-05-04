@@ -1,19 +1,19 @@
 package com.bookify.backendbookify_saas.controllers;
 
 import com.bookify.backendbookify_saas.models.dtos.InviteKeyAdminDto;
-import com.bookify.backendbookify_saas.models.dtos.ValidateInviteKeyResponse;
 import com.bookify.backendbookify_saas.models.entities.BusinessInviteToken;
 import com.bookify.backendbookify_saas.models.enums.InviteTokenStatus;
 import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
 import io.swagger.v3.oas.annotations.Operation;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/admin/invite-keys")
@@ -33,11 +33,12 @@ public class AdminController {
 
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "List invite keys", description = "List invite keys with status and metadata (raw tokens not returned)")
+    @Operation(summary = "List invite keys", description = "List all invite keys with raw tokens, status, and metadata")
     public ResponseEntity<List<InviteKeyAdminDto>> listKeys(@RequestParam(required = false) InviteTokenStatus status) {
         List<BusinessInviteToken> tokens = inviteService.listKeys(status);
         List<InviteKeyAdminDto> dtos = tokens.stream().map(t -> InviteKeyAdminDto.builder()
                 .id(t.getId())
+                .rawToken(t.getRawToken())
                 .status(t.getStatus())
                 .createdAt(t.getCreatedAt())
                 .expiresAt(t.getExpiresAt())

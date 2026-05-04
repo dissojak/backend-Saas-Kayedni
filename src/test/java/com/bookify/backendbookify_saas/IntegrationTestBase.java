@@ -1,5 +1,7 @@
 package com.bookify.backendbookify_saas;
 
+import org.springframework.boot.test.context.SpringBootTest;
+
 import java.time.LocalDate;
 import java.time.LocalTime;
 

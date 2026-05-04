@@ -8,12 +8,15 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class InviteKeyAdminDto {
     private Long id;
+    private String rawToken;
     private InviteTokenStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime expiresAt;

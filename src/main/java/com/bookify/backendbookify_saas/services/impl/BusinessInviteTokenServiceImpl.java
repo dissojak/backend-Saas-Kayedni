@@ -1,14 +1,13 @@
 package com.bookify.backendbookify_saas.services.impl;
 
 import com.bookify.backendbookify_saas.models.entities.BusinessInviteToken;
-import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.enums.InviteTokenStatus;
 import com.bookify.backendbookify_saas.repositories.BusinessInviteTokenRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -17,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+
 
 @Service
 @RequiredArgsConstructor
