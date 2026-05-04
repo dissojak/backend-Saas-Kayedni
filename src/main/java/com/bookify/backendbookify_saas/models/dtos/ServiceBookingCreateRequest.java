@@ -2,6 +2,8 @@ package com.bookify.backendbookify_saas.models.dtos;
 
 import com.bookify.backendbookify_saas.models.enums.BookingStatusEnum;
 import jakarta.validation.constraints.NotNull;
+import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
