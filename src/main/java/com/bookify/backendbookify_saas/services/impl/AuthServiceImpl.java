@@ -15,6 +15,7 @@ import com.bookify.backendbookify_saas.repositories.UserRepository;
 import com.bookify.backendbookify_saas.security.JwtService;
 import com.bookify.backendbookify_saas.services.AuthService;
 import com.bookify.backendbookify_saas.services.IndustryFeedbackService;
+import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -49,6 +50,7 @@ public class AuthServiceImpl implements AuthService {
     private final CategoryRepository categoryRepository;
     private final StaffRepository staffRepository;
     private final IndustryFeedbackService industryFeedbackService;
+    private final BusinessInviteTokenService inviteTokenService;
 
     /**
      * Inscription d'un nouveau client/utilisateur avec rôle optionnel
@@ -95,6 +97,11 @@ public class AuthServiceImpl implements AuthService {
                 throw new IllegalArgumentException("Business information is required for business owner signup");
             }
 
+            // Require invite key for business owner signup
+            if (request.getInviteKey() == null || request.getInviteKey().isBlank()) {
+                throw new IllegalArgumentException("inviteKey is required for Business Owner signup");
+            }
+
             if (businessRepository.existsByOwner(savedUser)) {
                 throw new IllegalArgumentException("You already have a business associated with your account");
             }
@@ -133,6 +140,10 @@ public class AuthServiceImpl implements AuthService {
                         .contactEmail(feedbackRequest.getContactEmail())
                         .build());
             }
+
+            // Consume the invite key (mark USED) after successful business creation. This participates in the
+            // surrounding transaction so it will rollback if business creation fails.
+            inviteTokenService.validateAndConsume(request.getInviteKey(), savedUser.getId());
         }
 
         // 8. Si non VERIFIED, créer un token d'activation et envoyer l'email
