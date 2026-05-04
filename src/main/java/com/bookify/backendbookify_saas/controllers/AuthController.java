@@ -3,6 +3,7 @@ package com.bookify.backendbookify_saas.controllers;
 import com.bookify.backendbookify_saas.models.dtos.*;
 import com.bookify.backendbookify_saas.security.JwtService;
 import com.bookify.backendbookify_saas.services.AuthService;
+import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +35,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtService jwtService;
+    private final BusinessInviteTokenService inviteTokenService;
 
     @Value("${application.security.jwt.refresh-token.expiration}")
     private long refreshTokenExpiration;
@@ -208,6 +210,19 @@ public class AuthController {
     public ResponseEntity<PasswordResetResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         PasswordResetResponse response = authService.resetPassword(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Validate a one-time invite key before signup.
+     */
+    @PostMapping("/validate-invite-key")
+    @Operation(summary = "Validate invite key", description = "Validate one-time invite key before signup")
+    public ResponseEntity<ValidateInviteKeyResponse> validateInviteKey(@Valid @RequestBody ValidateInviteKeyRequest request) {
+        boolean valid = inviteTokenService.validateKey(request.getInviteKey());
+        if (valid) {
+            return ResponseEntity.ok(ValidateInviteKeyResponse.builder().valid(true).message("Key is valid and ready to use").build());
+        }
+        return ResponseEntity.badRequest().body(ValidateInviteKeyResponse.builder().valid(false).message("Invalid or already used key").build());
     }
 
     /**
