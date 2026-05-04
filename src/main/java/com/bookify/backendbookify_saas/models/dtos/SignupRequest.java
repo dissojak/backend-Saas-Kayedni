@@ -42,4 +42,7 @@ public class SignupRequest {
     // Optional for non-owner roles, required in service for BUSINESS_OWNER signup flow
     @Valid
     private SignupBusinessRequest business;
+
+    // Optional invite key provided by business owner during signup
+    private String inviteKey;
 }
