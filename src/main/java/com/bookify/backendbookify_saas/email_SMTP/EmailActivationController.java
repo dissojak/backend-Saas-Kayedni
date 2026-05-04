@@ -26,7 +26,7 @@ public class EmailActivationController {
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
 
-    @Value("${frontend.prod.url:https://myproductionfrontend.com}")
+    @Value("${frontend.prod.url:http://54.38.183.201/frontend}")
     private String prodFrontendUrl;
 
     @GetMapping("/activate")
