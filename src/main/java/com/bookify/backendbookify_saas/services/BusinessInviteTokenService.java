@@ -2,8 +2,8 @@ package com.bookify.backendbookify_saas.services;
 
 import com.bookify.backendbookify_saas.models.entities.BusinessInviteToken;
 import com.bookify.backendbookify_saas.models.enums.InviteTokenStatus;
-
 import java.util.List;
+
 
 public interface BusinessInviteTokenService {
 

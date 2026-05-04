@@ -5,6 +5,10 @@ import com.bookify.backendbookify_saas.models.entities.User;
 import com.bookify.backendbookify_saas.models.enums.InviteTokenStatus;
 import com.bookify.backendbookify_saas.repositories.BusinessInviteTokenRepository;
 import com.bookify.backendbookify_saas.repositories.UserRepository;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDateTime;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -12,10 +16,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.time.LocalDateTime;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
