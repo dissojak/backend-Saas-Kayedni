@@ -42,3 +42,4 @@ backend.log
 
 # macOS metadata
 .DS_Store
+!**/src/main/resources/application-prod.properties

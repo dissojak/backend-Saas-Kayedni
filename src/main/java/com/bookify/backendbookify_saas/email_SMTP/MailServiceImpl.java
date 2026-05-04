@@ -20,7 +20,7 @@ public class MailServiceImpl implements MailService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    @Value("${application.email.from-display-name:Bookify}")
+    @Value("${application.email.from-display-name:Kayedni}")
     private String fromDisplayName;
 
     @Value("${application.base-url:http://localhost:8088}")

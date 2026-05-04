@@ -10,6 +10,7 @@ import com.bookify.backendbookify_saas.repositories.*;
 import com.bookify.backendbookify_saas.security.JwtService;
 import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
 import com.bookify.backendbookify_saas.services.IndustryFeedbackService;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -18,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

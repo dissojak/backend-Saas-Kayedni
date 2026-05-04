@@ -1,14 +1,14 @@
 package com.bookify.backendbookify_saas.models.dtos;
 
+import com.bookify.backendbookify_saas.models.enums.RoleEnum;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.bookify.backendbookify_saas.models.enums.RoleEnum;
 
 /**
  * DTO pour la requête d'inscription d'un client
