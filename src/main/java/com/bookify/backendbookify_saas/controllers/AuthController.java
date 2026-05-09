@@ -107,11 +107,41 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         AuthResponse authResponse = authService.login(request);
 
-        // Set refresh token in httpOnly secure cookie
+        // Set refresh token only when the account completed the full login flow
+        if (authResponse.getToken() != null) {
+            String refreshToken = authService.generateRefreshTokenForUser(authResponse.getUserId());
+            setRefreshTokenCookie(response, refreshToken);
+        }
+
+        return ResponseEntity.ok(authResponse);
+    }
+
+    /**
+     * Verify a pending two-factor challenge and complete the login.
+     */
+    @PostMapping("/verify-2fa")
+    @Operation(summary = "Verify two-factor login", description = "Complete login after the user enters their 2FA code")
+    public ResponseEntity<AuthResponse> verifyTwoFactorLogin(
+            @Valid @RequestBody TwoFactorLoginVerifyRequest request,
+            HttpServletResponse response) {
+
+        AuthResponse authResponse = authService.verifyTwoFactorLogin(request);
         String refreshToken = authService.generateRefreshTokenForUser(authResponse.getUserId());
         setRefreshTokenCookie(response, refreshToken);
 
         return ResponseEntity.ok(authResponse);
+    }
+
+    /**
+     * Send a challenge code to email or SMS for an ongoing two-factor login.
+     */
+    @PostMapping("/verify-2fa/send-code")
+    @Operation(summary = "Send 2FA challenge code", description = "Send a login verification code to EMAIL or SMS")
+    public ResponseEntity<Map<String, String>> sendTwoFactorLoginCode(
+            @Valid @RequestBody TwoFactorLoginSendCodeRequest request) {
+
+        String message = authService.sendTwoFactorLoginCode(request);
+        return ResponseEntity.ok(Map.of("message", message));
     }
 
     /**
@@ -246,6 +276,115 @@ public class AuthController {
 
         String userId = authentication.getName();
         Map<String, Object> response = authService.switchContext(userId, request.getActiveMode());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Create or fetch the current user's 2FA setup data.
+     */
+    @PostMapping("/2fa/setup")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Setup two-factor authentication", description = "Create a QR code and secret for the current user")
+    public ResponseEntity<TwoFactorSetupResponse> setupTwoFactor(
+            org.springframework.security.core.Authentication authentication) {
+
+        if (authentication == null) {
+            authentication = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        TwoFactorSetupResponse response = authService.setupTwoFactor(authentication.getName());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Enable two-factor authentication after code verification.
+     */
+    @PostMapping("/2fa/enable")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Enable two-factor authentication", description = "Validate the current 2FA code and enable it for the account")
+    public ResponseEntity<TwoFactorSetupResponse> enableTwoFactor(
+            org.springframework.security.core.Authentication authentication,
+            @Valid @RequestBody TwoFactorCodeRequest request) {
+
+        if (authentication == null) {
+            authentication = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        TwoFactorSetupResponse response = authService.enableTwoFactor(authentication.getName(), request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Send setup verification code for EMAIL or SMS method activation.
+     */
+    @PostMapping("/2fa/send-code")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Send 2FA setup code", description = "Send setup verification code for EMAIL or SMS methods")
+    public ResponseEntity<Map<String, String>> sendTwoFactorSetupCode(
+            org.springframework.security.core.Authentication authentication,
+            @Valid @RequestBody TwoFactorSendCodeRequest request) {
+
+        if (authentication == null) {
+            authentication = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String message = authService.sendTwoFactorSetupCode(authentication.getName(), request);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    /**
+     * Disable two-factor authentication after code verification.
+     */
+    @PostMapping("/2fa/disable")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Disable two-factor authentication", description = "Turn off 2FA for the current account")
+    public ResponseEntity<Map<String, String>> disableTwoFactor(
+            org.springframework.security.core.Authentication authentication,
+            @Valid @RequestBody TwoFactorCodeRequest request) {
+
+        if (authentication == null) {
+            authentication = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String message = authService.disableTwoFactor(authentication.getName(), request);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    /**
+     * Regenerate account backup codes for 2FA recovery.
+     */
+    @PostMapping("/2fa/backup-codes/regenerate")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Regenerate backup codes", description = "Generate new one-time backup codes after 2FA verification")
+    public ResponseEntity<TwoFactorBackupCodesResponse> regenerateBackupCodes(
+            org.springframework.security.core.Authentication authentication,
+            @Valid @RequestBody TwoFactorCodeRequest request) {
+
+        if (authentication == null) {
+            authentication = SecurityContextHolder.getContext().getAuthentication();
+        }
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        TwoFactorBackupCodesResponse response = authService.regenerateBackupCodes(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 }

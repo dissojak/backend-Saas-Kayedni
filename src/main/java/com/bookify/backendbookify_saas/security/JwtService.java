@@ -59,6 +59,28 @@ public class JwtService {
     }
 
     /**
+     * Generates a short-lived token used only for two-factor verification.
+     */
+    public String generateTwoFactorChallengeTokenForSubject(String subject) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("purpose", "two_factor_challenge");
+        return buildToken(claims, subject, 5 * 60 * 1000L);
+    }
+
+    public boolean isTwoFactorChallengeTokenValid(String token, String subject) {
+        try {
+            final String tokenSubject = extractUsername(token);
+            final String purpose = extractClaim(token, claims -> claims.get("purpose", String.class));
+            return tokenSubject != null
+                    && tokenSubject.equals(subject)
+                    && "two_factor_challenge".equals(purpose)
+                    && !isTokenExpired(token);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /**
      * Vérifie si un token est valide pour le subject donné (par ex. userId) — vérifie la signature et l'expiration
      */
     public boolean isTokenValidForSubject(String token, String subject) {

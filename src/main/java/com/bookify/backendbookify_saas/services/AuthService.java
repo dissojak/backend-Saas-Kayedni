@@ -6,6 +6,8 @@ import java.util.Map;
 public interface AuthService {
     AuthResponse signup(SignupRequest request);
     AuthResponse login(LoginRequest request);
+    AuthResponse verifyTwoFactorLogin(TwoFactorLoginVerifyRequest request);
+    String sendTwoFactorLoginCode(TwoFactorLoginSendCodeRequest request);
     String activateAccount(String token);
     RefreshTokenResponse refreshToken(String refreshToken);
     String logout(String userId, String refreshToken);
@@ -14,4 +16,9 @@ public interface AuthService {
     PasswordResetResponse forgotPassword(ForgotPasswordRequest request);
     PasswordResetResponse resetPassword(ResetPasswordRequest request);
     Map<String, Object> switchContext(String userId, String activeMode);
+    TwoFactorSetupResponse setupTwoFactor(String userId);
+    TwoFactorSetupResponse enableTwoFactor(String userId, TwoFactorCodeRequest request);
+    String sendTwoFactorSetupCode(String userId, TwoFactorSendCodeRequest request);
+    String disableTwoFactor(String userId, TwoFactorCodeRequest request);
+    TwoFactorBackupCodesResponse regenerateBackupCodes(String userId, TwoFactorCodeRequest request);
 }

@@ -71,9 +71,43 @@ public class User {
     @Column(name = "password_reset_expires_at")
     private LocalDateTime passwordResetExpiresAt;
 
+    @Column(name = "two_factor_enabled", nullable = false)
+    private boolean twoFactorEnabled = false;
+
+    @Column(name = "two_factor_secret")
+    private String twoFactorSecret;
+
+    @Column(name = "two_factor_enabled_at")
+    private LocalDateTime twoFactorEnabledAt;
+
+    @Column(name = "two_factor_methods")
+    private String twoFactorMethods;
+
+    @Column(name = "two_factor_email_code_hash")
+    private String twoFactorEmailCodeHash;
+
+    @Column(name = "two_factor_email_code_expires_at")
+    private LocalDateTime twoFactorEmailCodeExpiresAt;
+
+    @Column(name = "two_factor_sms_code_hash")
+    private String twoFactorSmsCodeHash;
+
+    @Column(name = "two_factor_sms_code_expires_at")
+    private LocalDateTime twoFactorSmsCodeExpiresAt;
+
+    @Lob
+    @Column(name = "two_factor_backup_codes_hash", columnDefinition = "TEXT")
+    private String twoFactorBackupCodesHash;
+
+    @Column(name = "two_factor_backup_codes_generated_at")
+    private LocalDateTime twoFactorBackupCodesGeneratedAt;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        if (twoFactorMethods == null) {
+            twoFactorMethods = "";
+        }
     }
 
     @PreUpdate

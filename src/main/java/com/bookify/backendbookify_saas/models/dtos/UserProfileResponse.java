@@ -3,6 +3,7 @@ package com.bookify.backendbookify_saas.models.dtos;
 import com.bookify.backendbookify_saas.models.enums.RoleEnum;
 import com.bookify.backendbookify_saas.models.enums.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +26,8 @@ public class UserProfileResponse {
     private RoleEnum role;
     private UserStatusEnum status;
     private String avatarUrl;
+    private Boolean twoFactorEnabled;
+    private List<String> twoFactorMethods;
 
     // For business owners
     private Boolean hasBusiness;

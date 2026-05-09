@@ -3,6 +3,7 @@ package com.bookify.backendbookify_saas.models.dtos;
 import com.bookify.backendbookify_saas.models.enums.RoleEnum;
 import com.bookify.backendbookify_saas.models.enums.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,5 +39,10 @@ public class AuthResponse {
     // New fields for BO acting as staff in their own business
     private Boolean isAlsoStaff;  // Whether this BO also has a staff record in their business
     private Long staffId;  // The staff ID for this BO (if isAlsoStaff = true)
+
+    private Boolean twoFactorEnabled;
+    private Boolean requiresTwoFactor;
+    private String twoFactorToken;
+    private List<String> twoFactorMethods;
 }
 

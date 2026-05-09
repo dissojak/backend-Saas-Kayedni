@@ -6,6 +6,7 @@ import com.bookify.backendbookify_saas.exceptions.UserAlreadyExistsException;
 import com.bookify.backendbookify_saas.models.dtos.*;
 import com.bookify.backendbookify_saas.models.entities.*;
 import com.bookify.backendbookify_saas.models.enums.RoleEnum;
+import com.bookify.backendbookify_saas.models.enums.TwoFactorMethod;
 import com.bookify.backendbookify_saas.models.enums.UserStatusEnum;
 import com.bookify.backendbookify_saas.repositories.ActivationTokenRepository;
 import com.bookify.backendbookify_saas.repositories.BusinessRepository;
@@ -16,16 +17,23 @@ import com.bookify.backendbookify_saas.security.JwtService;
 import com.bookify.backendbookify_saas.services.AuthService;
 import com.bookify.backendbookify_saas.services.BusinessInviteTokenService;
 import com.bookify.backendbookify_saas.services.IndustryFeedbackService;
+import com.bookify.backendbookify_saas.services.SmsService;
+import com.bookify.backendbookify_saas.services.TwoFactorAuthService;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -39,18 +47,21 @@ public class AuthServiceImpl implements AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthServiceImpl.class);
     private static final Long OTHER_INDUSTRY_CATEGORY_ID = 10L;
+    private static final int TWO_FACTOR_CODE_TTL_MINUTES = 10;
+    private static final int BACKUP_CODES_COUNT = 10;
 
     private final UserRepository userRepository;
     private final ActivationTokenRepository activationTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
     private final MailService mailService;
     private final BusinessRepository businessRepository;
     private final CategoryRepository categoryRepository;
     private final StaffRepository staffRepository;
     private final IndustryFeedbackService industryFeedbackService;
     private final BusinessInviteTokenService inviteTokenService;
+    private final TwoFactorAuthService twoFactorAuthService;
+    private final SmsService smsService;
 
     /**
      * Inscription d'un nouveau client/utilisateur avec rôle optionnel
@@ -229,6 +240,66 @@ public class AuthServiceImpl implements AuthService {
         return "Your account has been activated successfully. You can now log in.";
     }
 
+    private AuthResponse buildAuthenticatedResponse(User user, String token) {
+        AuthResponse.AuthResponseBuilder builder = AuthResponse.builder()
+                .token(token)
+                .userId(user.getId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .phone(user.getPhoneNumber())
+                .role(user.getRole())
+                .status(user.getStatus())
+                .avatar(user.getAvatarUrl())
+                .twoFactorEnabled(user.isTwoFactorEnabled())
+                .twoFactorMethods(getMethodsForResponse(user).stream().map(Enum::name).toList())
+                .message("Login successful");
+
+        if (user.getRole() == RoleEnum.BUSINESS_OWNER) {
+            boolean hasBusiness = false;
+            Long businessId = null;
+            String businessName = null;
+            String businessCategoryName = null;
+            boolean isAlsoStaff = false;
+            Long staffId = null;
+
+            Optional<Business> maybeBusiness = businessRepository.findByOwnerId(user.getId());
+            if (maybeBusiness.isPresent()) {
+                Business b = maybeBusiness.get();
+                hasBusiness = true;
+                businessId = b.getId();
+                businessName = b.getName();
+                businessCategoryName = b.getCategory() != null ? b.getCategory().getName() : null;
+            }
+
+            Optional<Staff> maybeStaff = staffRepository.findByIdWithBusiness(user.getId());
+            if (maybeStaff.isPresent()) {
+                Staff staff = maybeStaff.get();
+                isAlsoStaff = true;
+                staffId = staff.getId();
+            }
+
+            builder.hasBusiness(hasBusiness)
+                    .businessId(businessId)
+                    .businessName(businessName)
+                    .businessCategoryName(businessCategoryName)
+                    .isAlsoStaff(isAlsoStaff)
+                    .staffId(staffId);
+        }
+
+        if (user.getRole() == RoleEnum.STAFF) {
+            Optional<Staff> maybeStaff = staffRepository.findByIdWithBusiness(user.getId());
+            if (maybeStaff.isPresent() && maybeStaff.get().getBusiness() != null) {
+                Business b = maybeStaff.get().getBusiness();
+                builder.hasBusiness(true)
+                        .businessId(b.getId())
+                        .businessName(b.getName())
+                        .businessCategoryName(b.getCategory() != null ? b.getCategory().getName() : null);
+            }
+        }
+
+        return builder.build();
+    }
+
     /**
      * Login user
      */
@@ -259,73 +330,233 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException("Your account has been suspended. Please contact support.");
         }
 
+        if (user.isTwoFactorEnabled()) {
+            Set<TwoFactorMethod> enabledMethods = getEnabledMethods(user);
+            Set<TwoFactorMethod> responseMethods = getMethodsForResponse(user);
+            if (enabledMethods.isEmpty()) {
+                throw new IllegalArgumentException("Two-factor authentication is enabled but no method is configured for this account");
+            }
+
+            String challengeToken = jwtService.generateTwoFactorChallengeTokenForSubject(String.valueOf(user.getId()));
+
+            return AuthResponse.builder()
+                    .userId(user.getId())
+                    .name(user.getName())
+                    .email(user.getEmail())
+                    .phone(user.getPhoneNumber())
+                    .role(user.getRole())
+                    .status(user.getStatus())
+                    .avatar(user.getAvatarUrl())
+                    .twoFactorEnabled(true)
+                    .requiresTwoFactor(true)
+                    .twoFactorToken(challengeToken)
+                    .twoFactorMethods(responseMethods.stream().map(Enum::name).toList())
+                    .message("Two-factor authentication code required")
+                    .build();
+        }
+
         // 4. Generate access token only (refresh token will be set in httpOnly cookie by controller)
         String token = jwtService.generateTokenForSubject(String.valueOf(user.getId()));
         logger.info("JWT token generated for user ID: {}", user.getId());
 
-        // Prepare builder with common fields
-        AuthResponse.AuthResponseBuilder builder = AuthResponse.builder()
-                .token(token)
-                .userId(user.getId())
-                .name(user.getName())
-                .email(user.getEmail())
-            .phone(user.getPhoneNumber())
-                .role(user.getRole())
-                .status(user.getStatus())
-                .avatar(user.getAvatarUrl());
-
-        // 5. If owner — check business existence and include it in response
-        if (user.getRole() == RoleEnum.BUSINESS_OWNER) {
-            boolean hasBusiness = false;
-            Long businessId = null;
-            String businessName = null;
-            String businessCategoryName = null;
-            boolean isAlsoStaff = false;
-            Long staffId = null;
-
-            Optional<Business> maybeBusiness = businessRepository.findByOwnerId(user.getId());
-            if (maybeBusiness.isPresent()) {
-                Business b = maybeBusiness.get();
-                hasBusiness = true;
-                businessId = b.getId();
-                businessName = b.getName();
-                businessCategoryName = b.getCategory() != null ? b.getCategory().getName() : null;
-            }
-
-            // Check if this BO also has a staff record in their business
-            Optional<Staff> maybeStaff = staffRepository.findByIdWithBusiness(user.getId());
-            if (maybeStaff.isPresent()) {
-                Staff staff = maybeStaff.get();
-                isAlsoStaff = true;
-                staffId = staff.getId();
-            }
-
-            // attach owner-specific fields (will be serialized only for owners)
-            builder.hasBusiness(hasBusiness)
-                    .businessId(businessId)
-                    .businessName(businessName)
-                    .businessCategoryName(businessCategoryName)
-                    .isAlsoStaff(isAlsoStaff)
-                    .staffId(staffId);
-        }
-
-        // 6. If staff — include their business info in response
-        if (user.getRole() == RoleEnum.STAFF) {
-            Optional<Staff> maybeStaff = staffRepository.findByIdWithBusiness(user.getId());
-            if (maybeStaff.isPresent() && maybeStaff.get().getBusiness() != null) {
-                Business b = maybeStaff.get().getBusiness();
-                builder.hasBusiness(true)
-                        .businessId(b.getId())
-                        .businessName(b.getName())
-                        .businessCategoryName(b.getCategory() != null ? b.getCategory().getName() : null);
-            }
-        }
-
-        // message and build
-        builder.message("Login successful");
-        AuthResponse response = builder.build();
+        AuthResponse response = buildAuthenticatedResponse(user, token);
         logger.info("Login response being returned: status={} avatar={} response={}", user.getStatus(), user.getAvatarUrl(), response);
         return response;
+    }
+
+    @Override
+    public AuthResponse verifyTwoFactorLogin(TwoFactorLoginVerifyRequest request) {
+        String userId;
+        try {
+            userId = jwtService.extractUsername(request.getTwoFactorToken());
+        } catch (Exception ex) {
+            throw new InvalidTokenException("Invalid or expired two-factor challenge token");
+        }
+
+        if (!jwtService.isTwoFactorChallengeTokenValid(request.getTwoFactorToken(), userId)) {
+            throw new InvalidTokenException("Invalid or expired two-factor challenge token");
+        }
+
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isTwoFactorEnabled()) {
+            throw new IllegalArgumentException("Two-factor authentication is not enabled for this account");
+        }
+
+        TwoFactorMethod method = request.getMethod() == null ? TwoFactorMethod.APP : request.getMethod();
+        if (!validateTwoFactorCode(user, method, request.getCode(), true)) {
+            throw new IllegalArgumentException("Invalid two-factor authentication code");
+        }
+
+        String token = jwtService.generateTokenForSubject(String.valueOf(user.getId()));
+        return buildAuthenticatedResponse(user, token);
+    }
+
+    @Override
+    @Transactional
+    public String sendTwoFactorLoginCode(TwoFactorLoginSendCodeRequest request) {
+        String userId;
+        try {
+            userId = jwtService.extractUsername(request.getTwoFactorToken());
+        } catch (Exception ex) {
+            throw new InvalidTokenException("Invalid or expired two-factor challenge token");
+        }
+
+        if (!jwtService.isTwoFactorChallengeTokenValid(request.getTwoFactorToken(), userId)) {
+            throw new InvalidTokenException("Invalid or expired two-factor challenge token");
+        }
+
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        sendMethodCode(user, request.getMethod());
+        userRepository.save(user);
+
+        return request.getMethod() == TwoFactorMethod.EMAIL
+                ? "A verification code has been sent to your email"
+                : "A verification code has been sent by SMS";
+    }
+
+    @Override
+    @Transactional
+    public TwoFactorSetupResponse setupTwoFactor(String userId) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (user.getTwoFactorSecret() == null || user.getTwoFactorSecret().isBlank()) {
+            String secret = twoFactorAuthService.createCredentials().getKey();
+            user.setTwoFactorSecret(secret);
+            userRepository.save(user);
+        }
+
+        String otpauthUri = twoFactorAuthService.buildOtpAuthUri(user.getEmail(), user.getTwoFactorSecret());
+        String qrCodeDataUrl = twoFactorAuthService.buildQrCodeDataUrl(otpauthUri);
+
+        return TwoFactorSetupResponse.builder()
+                .enabled(user.isTwoFactorEnabled())
+                .secret(user.getTwoFactorSecret())
+                .manualEntryKey(user.getTwoFactorSecret())
+                .otpauthUri(otpauthUri)
+                .qrCodeDataUrl(qrCodeDataUrl)
+            .enabledMethods(getEnabledMethods(user).stream().map(Enum::name).toList())
+            .availableMethods(Arrays.stream(TwoFactorMethod.values()).map(Enum::name).toList())
+                .message(user.isTwoFactorEnabled()
+                        ? "Two-factor authentication is already enabled"
+                        : "Scan the QR code with your authenticator app and enter the generated code to enable 2FA")
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public TwoFactorSetupResponse enableTwoFactor(String userId, TwoFactorCodeRequest request) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        TwoFactorMethod method = request.getMethod() == null ? TwoFactorMethod.APP : request.getMethod();
+
+        if (!validateOrPrepareEnableMethod(user, method, request.getCode())) {
+            throw new IllegalArgumentException("Invalid two-factor authentication code");
+        }
+
+        Set<TwoFactorMethod> enabledMethods = getEnabledMethods(user);
+        enabledMethods.add(method);
+        setEnabledMethods(user, enabledMethods);
+
+        user.setTwoFactorEnabled(true);
+        user.setTwoFactorEnabledAt(LocalDateTime.now());
+
+        List<String> plainBackupCodes = null;
+        if (user.getTwoFactorBackupCodesHash() == null || user.getTwoFactorBackupCodesHash().isBlank()) {
+            plainBackupCodes = generateBackupCodes();
+            storeBackupCodes(user, plainBackupCodes);
+        }
+
+        String otpauthUri = twoFactorAuthService.buildOtpAuthUri(user.getEmail(), user.getTwoFactorSecret());
+        String qrCodeDataUrl = twoFactorAuthService.buildQrCodeDataUrl(otpauthUri);
+
+        userRepository.save(user);
+
+        return TwoFactorSetupResponse.builder()
+                .enabled(true)
+                .secret(user.getTwoFactorSecret())
+                .manualEntryKey(user.getTwoFactorSecret())
+                .otpauthUri(otpauthUri)
+                .qrCodeDataUrl(qrCodeDataUrl)
+                .enabledMethods(enabledMethods.stream().map(Enum::name).toList())
+                .availableMethods(Arrays.stream(TwoFactorMethod.values()).map(Enum::name).toList())
+                .backupCodes(plainBackupCodes)
+                .message("Two-factor authentication method enabled successfully")
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public String sendTwoFactorSetupCode(String userId, TwoFactorSendCodeRequest request) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        sendMethodCode(user, request.getMethod());
+        userRepository.save(user);
+
+        return request.getMethod() == TwoFactorMethod.EMAIL
+                ? "A verification code has been sent to your email"
+                : "A verification code has been sent by SMS";
+    }
+
+    @Override
+    @Transactional
+    public String disableTwoFactor(String userId, TwoFactorCodeRequest request) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isTwoFactorEnabled()) {
+            return "Two-factor authentication is already disabled";
+        }
+
+        TwoFactorMethod method = request.getMethod();
+        if (!validateDisableCode(user, method, request.getCode())) {
+            throw new IllegalArgumentException("Invalid two-factor authentication code");
+        }
+
+        user.setTwoFactorEnabled(false);
+        user.setTwoFactorSecret(null);
+        user.setTwoFactorEnabledAt(null);
+        user.setTwoFactorMethods("");
+        user.setTwoFactorEmailCodeHash(null);
+        user.setTwoFactorEmailCodeExpiresAt(null);
+        user.setTwoFactorSmsCodeHash(null);
+        user.setTwoFactorSmsCodeExpiresAt(null);
+        user.setTwoFactorBackupCodesHash(null);
+        user.setTwoFactorBackupCodesGeneratedAt(null);
+        userRepository.save(user);
+
+        return "Two-factor authentication disabled successfully";
+    }
+
+    @Override
+    @Transactional
+    public TwoFactorBackupCodesResponse regenerateBackupCodes(String userId, TwoFactorCodeRequest request) {
+        User user = userRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!user.isTwoFactorEnabled()) {
+            throw new IllegalArgumentException("Two-factor authentication must be enabled first");
+        }
+
+        TwoFactorMethod method = request.getMethod() == null ? TwoFactorMethod.APP : request.getMethod();
+        if (!validateTwoFactorCode(user, method, request.getCode(), false)) {
+            throw new IllegalArgumentException("Invalid two-factor authentication code");
+        }
+
+        List<String> backupCodes = generateBackupCodes();
+        storeBackupCodes(user, backupCodes);
+        userRepository.save(user);
+
+        return TwoFactorBackupCodesResponse.builder()
+                .backupCodes(backupCodes)
+                .message("Backup codes regenerated successfully")
+                .build();
     }
 
     /**
@@ -397,7 +628,9 @@ public class AuthServiceImpl implements AuthService {
                 .phoneNumber(user.getPhoneNumber())
                 .role(user.getRole())
                 .status(user.getStatus())
-                .avatarUrl(user.getAvatarUrl());
+            .avatarUrl(user.getAvatarUrl())
+            .twoFactorEnabled(user.isTwoFactorEnabled())
+            .twoFactorMethods(getMethodsForResponse(user).stream().map(Enum::name).toList());
 
         // If business owner, include business info
         if (user.getRole() == RoleEnum.BUSINESS_OWNER) {
@@ -545,5 +778,187 @@ public class AuthServiceImpl implements AuthService {
                 "activeMode", activeMode,
                 "isAlsoStaff", true
         );
+    }
+
+    private Set<TwoFactorMethod> getEnabledMethods(User user) {
+        Set<TwoFactorMethod> methods = EnumSet.noneOf(TwoFactorMethod.class);
+
+        if (user.getTwoFactorMethods() != null && !user.getTwoFactorMethods().isBlank()) {
+            Arrays.stream(user.getTwoFactorMethods().split(","))
+                    .map(String::trim)
+                    .filter(v -> !v.isBlank())
+                    .forEach(v -> {
+                        try {
+                            methods.add(TwoFactorMethod.valueOf(v));
+                        } catch (IllegalArgumentException ignored) {
+                            // Skip unknown persisted value
+                        }
+                    });
+        }
+
+        if (methods.isEmpty() && user.getTwoFactorSecret() != null && !user.getTwoFactorSecret().isBlank()) {
+            methods.add(TwoFactorMethod.APP);
+        }
+
+        return methods;
+    }
+
+    private void setEnabledMethods(User user, Set<TwoFactorMethod> methods) {
+        String value = methods.stream()
+                .filter(m -> m != TwoFactorMethod.BACKUP_CODE)
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining(","));
+        user.setTwoFactorMethods(value);
+    }
+
+    private Set<TwoFactorMethod> getMethodsForResponse(User user) {
+        Set<TwoFactorMethod> methods = EnumSet.noneOf(TwoFactorMethod.class);
+        methods.addAll(getEnabledMethods(user));
+        if (user.getTwoFactorBackupCodesHash() != null && !user.getTwoFactorBackupCodesHash().isBlank()) {
+            methods.add(TwoFactorMethod.BACKUP_CODE);
+        }
+        return methods;
+    }
+
+    private boolean validateOrPrepareEnableMethod(User user, TwoFactorMethod method, String code) {
+        if (method == TwoFactorMethod.APP) {
+            if (user.getTwoFactorSecret() == null || user.getTwoFactorSecret().isBlank()) {
+                String secret = twoFactorAuthService.createCredentials().getKey();
+                user.setTwoFactorSecret(secret);
+            }
+            return twoFactorAuthService.verifyCode(user.getTwoFactorSecret(), code);
+        }
+
+        if (method == TwoFactorMethod.EMAIL) {
+            return verifyOneTimeCode(user.getTwoFactorEmailCodeHash(), user.getTwoFactorEmailCodeExpiresAt(), code);
+        }
+
+        if (method == TwoFactorMethod.SMS) {
+            return verifyOneTimeCode(user.getTwoFactorSmsCodeHash(), user.getTwoFactorSmsCodeExpiresAt(), code);
+        }
+
+        return false;
+    }
+
+    private boolean validateDisableCode(User user, TwoFactorMethod preferredMethod, String code) {
+        if (preferredMethod != null) {
+            return validateTwoFactorCode(user, preferredMethod, code, true);
+        }
+
+        return validateTwoFactorCode(user, TwoFactorMethod.APP, code, true)
+                || validateTwoFactorCode(user, TwoFactorMethod.EMAIL, code, true)
+                || validateTwoFactorCode(user, TwoFactorMethod.SMS, code, true)
+                || validateTwoFactorCode(user, TwoFactorMethod.BACKUP_CODE, code, true);
+    }
+
+    private boolean validateTwoFactorCode(User user, TwoFactorMethod method, String code, boolean consumeBackupCode) {
+        Set<TwoFactorMethod> enabledMethods = getEnabledMethods(user);
+
+        if (method != TwoFactorMethod.BACKUP_CODE && !enabledMethods.contains(method)) {
+            return false;
+        }
+
+        return switch (method) {
+            case APP -> user.getTwoFactorSecret() != null
+                    && !user.getTwoFactorSecret().isBlank()
+                    && twoFactorAuthService.verifyCode(user.getTwoFactorSecret(), code);
+            case EMAIL -> verifyOneTimeCode(user.getTwoFactorEmailCodeHash(), user.getTwoFactorEmailCodeExpiresAt(), code);
+            case SMS -> verifyOneTimeCode(user.getTwoFactorSmsCodeHash(), user.getTwoFactorSmsCodeExpiresAt(), code);
+            case BACKUP_CODE -> consumeBackupCode
+                    ? verifyAndConsumeBackupCode(user, code)
+                    : verifyBackupCode(user, code);
+        };
+    }
+
+    private boolean verifyOneTimeCode(String hash, LocalDateTime expiresAt, String code) {
+        if (hash == null || hash.isBlank() || expiresAt == null || LocalDateTime.now().isAfter(expiresAt)) {
+            return false;
+        }
+        return passwordEncoder.matches(code, hash);
+    }
+
+    private void sendMethodCode(User user, TwoFactorMethod method) {
+        if (method == TwoFactorMethod.APP || method == TwoFactorMethod.BACKUP_CODE) {
+            throw new IllegalArgumentException("Code sending is only supported for EMAIL or SMS methods");
+        }
+
+        String code = String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(TWO_FACTOR_CODE_TTL_MINUTES);
+
+        if (method == TwoFactorMethod.EMAIL) {
+            if (user.getEmail() == null || user.getEmail().isBlank()) {
+                throw new IllegalArgumentException("No email address found for this account");
+            }
+            user.setTwoFactorEmailCodeHash(passwordEncoder.encode(code));
+            user.setTwoFactorEmailCodeExpiresAt(expiresAt);
+            mailService.sendSimpleMessage(
+                    user.getEmail(),
+                    "Your 2FA verification code",
+                    "Your Kayedni verification code is: " + code + "\nThis code expires in " + TWO_FACTOR_CODE_TTL_MINUTES + " minutes."
+            );
+            return;
+        }
+
+        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
+            throw new IllegalArgumentException("No phone number found for this account");
+        }
+        user.setTwoFactorSmsCodeHash(passwordEncoder.encode(code));
+        user.setTwoFactorSmsCodeExpiresAt(expiresAt);
+        smsService.sendTwoFactorCode(user.getPhoneNumber(), code);
+    }
+
+    private List<String> generateBackupCodes() {
+        List<String> codes = new ArrayList<>();
+        String alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        SecureRandom random = new SecureRandom();
+
+        for (int i = 0; i < BACKUP_CODES_COUNT; i++) {
+            StringBuilder raw = new StringBuilder();
+            for (int j = 0; j < 8; j++) {
+                raw.append(alphabet.charAt(random.nextInt(alphabet.length())));
+            }
+            codes.add(raw.substring(0, 4) + "-" + raw.substring(4));
+        }
+
+        return codes;
+    }
+
+    private void storeBackupCodes(User user, List<String> plainCodes) {
+        String hashes = plainCodes.stream()
+                .map(passwordEncoder::encode)
+                .collect(Collectors.joining("\n"));
+        user.setTwoFactorBackupCodesHash(hashes);
+        user.setTwoFactorBackupCodesGeneratedAt(LocalDateTime.now());
+    }
+
+    private boolean verifyBackupCode(User user, String code) {
+        if (user.getTwoFactorBackupCodesHash() == null || user.getTwoFactorBackupCodesHash().isBlank()) {
+            return false;
+        }
+        return Arrays.stream(user.getTwoFactorBackupCodesHash().split("\\n"))
+                .filter(v -> !v.isBlank())
+                .anyMatch(hash -> passwordEncoder.matches(code, hash));
+    }
+
+    private boolean verifyAndConsumeBackupCode(User user, String code) {
+        if (user.getTwoFactorBackupCodesHash() == null || user.getTwoFactorBackupCodesHash().isBlank()) {
+            return false;
+        }
+
+        List<String> hashes = Arrays.stream(user.getTwoFactorBackupCodesHash().split("\\n"))
+                .filter(v -> !v.isBlank())
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        for (int i = 0; i < hashes.size(); i++) {
+            if (passwordEncoder.matches(code, hashes.get(i))) {
+                hashes.remove(i);
+                user.setTwoFactorBackupCodesHash(String.join("\n", hashes));
+                userRepository.save(user);
+                return true;
+            }
+        }
+
+        return false;
     }
 }
