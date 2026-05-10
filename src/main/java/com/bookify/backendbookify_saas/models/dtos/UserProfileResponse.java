@@ -19,6 +19,41 @@ import lombok.NoArgsConstructor;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserProfileResponse {
 
+    /**
+     * Constructor used by the JPQL constructor expression in StaffRepository.
+     * Maps staff fields without 2FA information (twoFactorEnabled/twoFactorMethods remain null).
+     * Parameter order must exactly match the query in StaffRepository.findUserProfileResponsesByBusinessId.
+     */
+    public UserProfileResponse(
+        Long userId,
+        String name,
+        String email,
+        String phoneNumber,
+        RoleEnum role,
+        UserStatusEnum status,
+        String avatarUrl,
+        Boolean hasBusiness,
+        Long businessId,
+        String businessName,
+        String businessCategoryName,
+        java.time.LocalTime defaultStartTime,
+        java.time.LocalTime defaultEndTime
+    ) {
+        this.userId = userId;
+        this.name = name;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.role = role;
+        this.status = status;
+        this.avatarUrl = avatarUrl;
+        this.hasBusiness = hasBusiness;
+        this.businessId = businessId;
+        this.businessName = businessName;
+        this.businessCategoryName = businessCategoryName;
+        this.defaultStartTime = defaultStartTime;
+        this.defaultEndTime = defaultEndTime;
+    }
+
     private Long userId;
     private String name;
     private String email;

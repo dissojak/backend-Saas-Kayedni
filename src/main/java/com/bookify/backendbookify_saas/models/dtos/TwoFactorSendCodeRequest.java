@@ -15,4 +15,11 @@ public class TwoFactorSendCodeRequest {
 
     @NotNull(message = "Two-factor method is required")
     private TwoFactorMethod method;
+
+    /**
+     * Reason/context for sending this code — used to compose a clear email message.
+     * Expected values: "SETUP", "DISABLE_METHOD", "BACKUP_CODES".
+     * Defaults to "SETUP" if not provided.
+     */
+    private String context;
 }
